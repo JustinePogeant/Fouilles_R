@@ -228,16 +228,18 @@ df %>% kable() %>% kable_styling(bootstrap_options = "striped", full_width = F)
 On scinde le dataFrame et l'on crée un dataFrame X (prédicteur) et un vecteur des catégories à prédire (Y)
 
 ```{r, echo = T}
-# à compléter
+X <- df[, -which(names(df) == "Controle")]  # prédicteurs
+Y <- df$Controle                             # variable à prédire
 ```
 
 
 ```{r, echo = F}
-# à compléter
+
 ```
 
 ```{r, echo = T}
-# à compléter
+
+
 ```
 <hr>
 
