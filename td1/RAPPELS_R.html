@@ -1,0 +1,408 @@
+<style type="text/css">
+body, td {font-size: 17px;}
+code.r{font-size: 5px;}
+pre { font-size: 15px;}
+</style>
+<p><code>{r setup, include=FALSE} knitr::opts_chunk$set(echo = TRUE)</code></p>
+<p><FONT color='#0066CC'><FONT size = 4 ></p>
+<div data-align="center">
+<p>Fouille de données avec R pour la data science et l’intelligence artificielle </p>
+<p>–TD 1: Rappels–</p>
+</div>
+<p></FONT></FONT></p>
+<p><FONT color='#0066CC'><FONT size = 4 ></p>
+<div data-align="center">
+<p>Badr TAJINI – ESIEE Paris<br />
+Source : Bertrand Roudier – ESIEE Paris</p>
+</div>
+<p></FONT></FONT></p>
+<hr style="border: 1px  solid gray">
+</hr>
+<p>ce TD a pour objectif de rappeler l’utilisation des dataframes et des listes en R</p>
+<hr style="border: 1px  solid gray">
+<h4 id="dataframes"><FONT color='#000033'> 1. Dataframes </FONT></h4>
+<p>Ce chapitre a pour objectif de rappeler les principales fonctions permettant de manipuler les data frames et les listes qui nous serviront tout au long de ce module. il ne s’agit donc pas d’une description exhaustive. Nous aborderons aussi les tables qui seront utilisées plus spécifiquement pour la classification bayésienne.</p>
+<h5 id="création"><FONT color='#000033'><FONT size = 3> 1.1 Création </FONT></FONT></h5>
+<ul>
+<li>on simule 4 vecteurs.
+<ul>
+<li>2 vecteurs simulent une distribution normale (var_1, var_2)</li>
+<li>1 vecteur simule une distribution uniforme (var_3)</li>
+<li>1 vecteur simule une variable binaire (var_4)</li>
+</ul></li>
+</ul>
+<pre class="{r}"><code>rm(list = ls())
+library(kableExtra)
+#- &gt; on fixe la graine
+set.seed(128943)
+#-&gt; simulation d&#39;une distribution normale (vecteurs)
+var_1 &lt;- rnorm(100,0,4)
+var_2 &lt;- rnorm(100,3,6)
+#-&gt; simulation d&#39;une distribution uniforme (vecteurs)
+var_3 &lt;- runif(100, min = 6, max = 10)</code></pre>
+<ul>
+<li>Simulation d’une variable binaire
+<ul>
+<li>on simule une distribution uniforme avec min = 0 et max = 1</li>
+<li>on fixe un seuil si x &lt;= 0.5 alors x =0 sinon x = 1</li>
+</ul></li>
+<li>Pour y parvenir :
+<ul>
+<li>On génère un vecteur contenant 100 éléments tous égaux à 100 (<em>rep</em>)</li>
+<li>On simule la distribution uniforme (<em>runif</em>)</li>
+<li>On fixe un seuil = 0.5 et l’on récupère les identifiants (id) &gt; seuil (<em>which</em>)</li>
+<li>On affecte aux éléments (id) du vecteur la valaur 1</li>
+</ul></li>
+</ul>
+<pre class="{r}"><code># méthode 1 (élégante)
+seuil &lt;- 0.5
+var_4 &lt;- ifelse(runif(100,min = 0, max = 1) &lt;= seuil, 1, 0)
+
+# méthode 2 (plus standard)
+var_4     &lt;- rep(0,100)
+id        &lt;- which(runif(100,min = 0, max = 1) &gt; seuil)
+var_4[id] &lt;- 1 
+</code></pre>
+<ul>
+<li>Création du dataframe à partir des vecteurs</li>
+</ul>
+<pre class="{r}"><code>df_1 &lt;- data.frame(&#39;A&#39; = var_1,
+                   &#39;B&#39; = var_2,
+                   &#39;C&#39; = var_3,
+                   &#39;D&#39; = var_4)
+# pour rappel
+#ncol(df_1) # nombre colonnnes 
+#nrow(df_1) # nombre de lignes</code></pre>
+<p><code>{r, echo=F} df_1 %&gt;% kbl(digits=3) %&gt;%  kable_styling(bootstrap_options = "striped", full_width = F, position = "center", latex_options = 'stripped') %&gt;% scroll_box( height = "250px")</code></p>
+<ul>
+<li>factorisation d’une variable
+<ul>
+<li>la variable binaire est factorisée et les labels sont transformés : 0 devient ‘NON’ et 1 devient ‘OUI’
+<ul>
+<li>On selectionne la variable avec un pointeur explicite (<em>$</em>) (equivalent à <em>.</em> en python)</li>
+</ul>
+<pre class="{r}"><code>df_1$D &lt;- factor(df_1$D , levels = c(0,1), labels = c(&#39;Oui&#39;,&#39;Non&#39;))</code></pre></li>
+</ul></li>
+<li>On vérifie que la variable D est bien factorielle (eq. catégorielle en R)</li>
+</ul>
+<pre class="{r}"><code>class(df_1$D)</code></pre>
+<ul>
+<li>On peut affecter des noms aux instances (lignes) du dataframe : Par exemple, à chaque ligne</li>
+</ul>
+<pre class="{r}"><code>row.names(df_1) &lt;- paste0(&#39;Patient_&#39;,1:100)
+</code></pre>
+<ul>
+<li>le data frame est maintenant le suivant</li>
+</ul>
+<p><code>{r, echo = F} df_1 %&gt;% kbl(digits=3) %&gt;%  kable_styling(bootstrap_options = "striped", full_width = F, position = "center", latex_options = 'stripped') %&gt;% scroll_box( height = "250px")</code></p>
+<p><br></p>
+<hr>
+<h5 id="extraction-variables"><FONT color='#000033'><FONT size = 3> 1.2 Extraction variables </FONT></FONT></h5>
+<ul>
+<li>Sélection des colonnes à partir des index</li>
+</ul>
+<pre class="{r}"><code># extraction à partir des index
+# attention si extractiuon d&#39;une seule variable, le résultat est un vecteur
+v_2 &lt;- df_1[,3]
+# extraction des variables A et D (le résultat est un dataframe)
+df_3 &lt;- df_1[,c(1,3)]
+class(df_3)</code></pre>
+<ul>
+<li>Sélection des colonnes à partir des pointeurs
+<ul>
+<li>une seule variable : le résultats est un vecteur</li>
+<li>pour extraire plusieurs variables, on crée un nouveau dataframe ```{r} # une seule variable v_3 &lt;- df_1<span class="math inline">$A # plusieurs variables df_5 &lt;- data.frame(df_1$</span>A, df_1$D)</li>
+</ul></li>
+</ul>
+<pre><code>
+* Sélection des colonnes à partir des noms des variables
+```{r}
+df_6 &lt;- df_1[c(&#39;A&#39;,&#39;D&#39;)]</code></pre>
+<h5 id="extraction-des-lignes"><FONT color='#000033'><FONT size = 3> 1.3 Extraction des lignes </FONT></FONT></h5>
+<ul>
+<li>Sélection des colonnes à partir des index des lignes</li>
+</ul>
+<pre class="{r}"><code># sélection de la ligne 53 le résultat est un dataframe !
+df_7 &lt;- df_1[53,] 
+
+# sélection des la lignes 11 à 15, 38 , 40, de 70, 72, 74 , 76, 78, 80 le résultats est un dataframe !
+df_8 &lt;- df_1[c (11:15, 38,40, seq(70,80,2)), ]</code></pre>
+<ul>
+<li>Sélection des colonnes à partir des nom des lignes (s’ils existent)</li>
+</ul>
+<pre class="{r}"><code># Sélection des patients 25, 28,74
+df_9 &lt;- df_1[c(&#39;Patient_25&#39;,&#39;Patient_28&#39;,&#39;Patient_74&#39;), ]</code></pre>
+<h5 id="extraction-lignes-colonnes"><FONT color='#000033'><FONT size = 3> 1.3 Extraction lignes / colonnes </FONT></FONT></h5>
+<ul>
+<li>Sélection des lignes et des colonnes en fonction des index</li>
+</ul>
+<pre class="{r}"><code># extraire les patients 11 à 15, 38 , 40, de 70, 72, 74 , 76, 78, 80 pour les variables A et D
+df_10 &lt;- df_1[c (11:15, 38,40, seq(70,80,2)), c(1,4)]
+</code></pre>
+<ul>
+<li>Sélection des lignes et des colonnes en fonction des noms</li>
+</ul>
+<pre class="{r}"><code># Sélection des patients 25, 28,74 pour les variables A et C
+df_11 &lt;- df_1[c(&#39;Patient_25&#39;,&#39;Patient_28&#39;,&#39;Patient_74&#39;),c(&#39;A&#39;,&#39;C&#39;) ]</code></pre>
+<h5 id="sélection"><FONT color='#000033'><FONT size = 3> 1.4 Sélection </FONT></FONT></h5>
+<ul>
+<li>Sélection des patients avec A &gt; 0.3</li>
+</ul>
+<pre class="{r}"><code>df_12 &lt;- df_1[ df_1$A &gt; 0, ]</code></pre>
+<ul>
+<li>Sélection des patients avec A &gt; 0.3 et B &lt; 2</li>
+</ul>
+<pre class="{r}"><code>df_13 &lt;- df_1[df_1$A &gt; 0.3 &amp; df_1$B &lt; 2 ,]</code></pre>
+<ul>
+<li>Sélection des patients avec A &gt; 0.3 et B &lt; 2 et D = Oui</li>
+</ul>
+<pre class="{r}"><code>df_14 &lt;- df_1[df_1$A &gt; 0.3 &amp; df_1$B &lt; 2 &amp; df_1$D == &#39;Oui&#39; ,]</code></pre>
+<ul>
+<li>Sélection des patients avec A &gt; 0.3 et B &lt; 2 et D = Oui et extraction des variables B et D</li>
+</ul>
+<pre class="{r}"><code>df_14 &lt;- df_1[df_1$A &gt; 0.3 &amp; df_1$B &lt; 2 &amp; df_1$D == &#39;Oui&#39; , c(&#39;B&#39;,&#39;D&#39;)]</code></pre>
+<ul>
+<li>On peut aussi utiliser la fonction subset :
+<ul>
+<li>Sélection des patients tel que A &gt; 0.3 et B &lt; 2 et D = Oui et extraction des variables B et D</li>
+</ul></li>
+</ul>
+<pre class="{r}"><code>df_15 &lt;- subset(df_1, A &gt; 0.3 &amp; B &lt; 2 &amp; D == &#39;Oui&#39;, select = c(B,D))</code></pre>
+<h5 id="application-de-fonctions"><FONT color='#000033'><FONT size = 3> 1.5 Application de fonctions </FONT></FONT></h5>
+<ul>
+<li>la fonctions <em>apply</em> permet d’appliquer des fonctions par ligne ou par colonn
+<ul>
+<li>Calcul de la moyenne : Attention, il faut ne pas prendre en compte la variable factorielle !
+<ul>
+<li>par ligne : MARGIN = 1</li>
+<li>par colonne : MARGIN = 2</li>
+</ul></li>
+</ul></li>
+</ul>
+<pre class="{r}"><code># moyenne par colonne margin = 2
+s1 &lt;- apply(df_1[, -4], MARGIN = 1, mean)
+
+# moyenne par colonne margin = 2
+s2 &lt;- apply(df_1[, -4], MARGIN = 2, mean)
+</code></pre>
+<ul>
+<li>On peut aussi utiliser la fonction <em>sapply</em> qui réalise automatiquement les calculs par colonnes</li>
+</ul>
+<pre class="{r}"><code>s2 &lt;- sapply(df_1[, -4], mean)</code></pre>
+<ul>
+<li>Il est aussi possible de définir sa propre fonction. Dans notre cas nous voulons calculer le coefficient de variation CV% = écart type / moyenne *100. Pour y parvenir, nous avons deux possibilités d’implémentation</li>
+</ul>
+<pre class="{r}"><code># utilisation d&#39;une fonction externe
+cv &lt;- function(x){return(sd(x, na.rm = T) / mean(x, na.rm = T) *100 )}
+s3 &lt;- sapply(df_1[-4], FUN = cv)
+
+# utilisation d&#39;une fonction interne
+s5 &lt;- sapply(df_1[-4], function(x){return(sd(x, na.rm = T) / mean(x, na.rm = T) *100 )})</code></pre>
+<ul>
+<li>Une autre fonction qui sera (très) utilisée dans le module est la fonction <em>lapply</em>. elle agit comme les fonction <em>sapply</em> et <em>apply</em> mais les résultats sont stockés spécifiquement sous forme d’une liste (cf. chap II)</li>
+</ul>
+<pre class="{r}"><code>cv &lt;- function(x){return(sd(x, na.rm = T) / mean(x, na.rm = T) *100 )}
+s4 &lt;- lapply(df_1[-4], FUN = cv)
+s4
+</code></pre>
+<h5 id="aggrégation"><FONT color='#000033'><FONT size = 3> 1.6 Aggrégation </FONT></FONT></h5>
+<ul>
+<li>Nous cherchons à calculer les moyennes de A,B,C par niveau de facteur de la variable catégorielle D. Pour y parvenir, nous utilisons la fonction <em>aggregate</em></li>
+</ul>
+<pre class="{r}"><code>ag_1 &lt;- aggregate(df_1[-4], by = list(df_1$D), mean)
+</code></pre>
+<ul>
+<li>de manière identique à la fonction <em>sapply</em> ou <em>apply</em>, on peut définir une fonction particulière (ici calcul des CV %) :</li>
+</ul>
+<pre class="{r}"><code>ag_2 &lt;- aggregate(df_1[-4], by = list(df_1$D), function(x){return(sd(x, na.rm = T) / mean(x, na.rm = T) *100 )})</code></pre>
+<h5 id="concaténation"><FONT color='#000033'><FONT size = 3> 1.7 Concaténation </FONT></FONT></h5>
+<ul>
+<li>On peut effectuer une concaténation de deux data frames en ligne ou en colonne</li>
+</ul>
+<pre class="{r}"><code># concaténation en colonnes
+# On crée deux dataFrame
+df_AB &lt;- data.frame(&#39;A&#39; = var_1,&#39;B&#39; = var_2)
+df_BC &lt;- data.frame(&#39;C&#39; = var_3,&#39;D&#39; = var_4)
+df_ABCD &lt;- cbind(df_AB, df_BC)
+
+# concaténation en ligne
+df_1_50   &lt;- df_1[1:50,]
+df_51_100 &lt;- df_1[51:100,]
+df_1_100 &lt;- rbind(df_1_50, df_51_100)
+# attention il est nécessaire les noms des variables soient identiques sinon cela ne fonctionne pas !
+</code></pre>
+<h5 id="utilitaires"><FONT color='#000033'><FONT size = 3> 1.8 Utilitaires </FONT></FONT></h5>
+<p>Dans ce paragraphe, nous décrivons quelques fonctions utiles qui vous serviront pour ce module</p>
+<ul>
+<li>modifier les nom des variables d’un dataframe</li>
+</ul>
+<pre class="{r}"><code># modifier tous les noms 
+names(df_1) &lt;- c(&#39;VAR_1&#39;,&#39;VAR_2&#39;,&#39;VAR_3&#39;,&#39;VAR_4&#39;)
+
+# modifier le nom de la 3 ième variable
+names(df_1)[3] &lt;- &#39;VAR_999&#39;</code></pre>
+<ul>
+<li>recherche le type de variable dans un data frame (retourne l’identifiant de la colonne)</li>
+</ul>
+<pre class="{r}"><code># variable numériques
+id_num &lt;- which(sapply(df_1, is.numeric))
+# puis les extraire 
+df_num &lt;- df_1[,id_num]
+
+# variable catégorielle
+id_cat &lt;- which(sapply(df_1, is.factor))
+# puis l&#39;extraire (attention sous forme de vecteur puisqu&#39;une seule variables !)
+df_cat &lt;- df_1[,id_cat] 
+</code></pre>
+<p>hr style=“border: 1px solid gray”&gt;</p>
+<h4 id="listes"><FONT color='#000033'> 2. Listes </FONT></h4>
+<p>La liste est un objet hétérogène. Il est composé d’un ensemble (ordonnée) d’éléments, ces derniers pouvant être différents (matrice, dataframe, ….).</p>
+<h5 id="création-dune-liste"><FONT color='#000033'> 2.1 Création d’une liste </FONT></h5>
+<pre class="{r}"><code>vecteur &lt;- seq(2,10,by=3)
+matrice &lt;- matrix(1:8,ncol=2)
+facteur &lt;- factor(c(&quot;M&quot;,&quot;M&quot;,&quot;F&quot;,&quot;M&quot;,&quot;F&quot;,&quot;M&quot;,&quot;M&quot;,&quot;M&quot;))
+ordonne &lt;- ordered(c(&quot;débutant&quot;,&quot;débutant&quot;,&quot;champion&quot;,
+                     &quot;champion&quot;,&quot;moyen&quot;,&quot;moyen&quot;,&quot;moyen&quot;,&quot;champion&quot;),
+                   levels=c(&quot;débutant&quot;,&quot;moyen&quot;,&quot;champion&quot;))
+mylist &lt;- list(vecteur,matrice,facteur,ordonne)
+mylist</code></pre>
+<ul>
+<li>extraction d’un élément de la liste(second élément). On utilise les doubles crochets</li>
+</ul>
+<pre class="{r}"><code>mat &lt;- mylist[[2]]
+mat</code></pre>
+<ul>
+<li>On peut affecter un nom à chaque élément de la liste</li>
+</ul>
+<pre class="{r}"><code>names(mylist)[[1]] &lt;- &#39;vecteur&#39;
+names(mylist)[[2]] &lt;- &#39;matrice&#39;
+names(mylist)[[3]] &lt;- &#39;facteur&#39;
+names(mylist)[[4]] &lt;- &#39;ordre&#39;
+mylist</code></pre>
+<ul>
+<li>On peut ainsi directement accéder à un élément de la liste par son nom en utilisant le pointeur explicite <em>$</em></li>
+</ul>
+<pre class="{r}"><code>mylist$vecteur</code></pre>
+<ul>
+<li>On peut ajouter un nouvel élément que nous appelons <em>rand</em> à la liste</li>
+</ul>
+<pre class="{r}"><code>r &lt;-  runif(10, min = 3, max = 12)
+mylist[[&#39;rand&#39;]] &lt;- r
+mylist
+</code></pre>
+<ul>
+<li>De manière générale, il est plus facile, lorsque cela est possible, de déclarer un nom pour chaque élément de la liste. Pour cela, il suffit d’écrire :</li>
+</ul>
+<pre class="{r}"><code># pour l&#39;exemple nous créons la même liste que précédemment mais en prenant de nousveau nom
+mylist2 &lt;- list(&#39;L_1&#39; =  vecteur, &#39;L_2&#39; = matrice, &#39;L_3&#39; = facteur, &#39;L_4&#39; = ordonne)</code></pre>
+<ul>
+<li>On peut aussi créer une liste de manière dynamique (important pour la suite du TP)</li>
+</ul>
+<pre class="{r}"><code># on crée une liste vide
+mylist3 &lt;- list()
+#... que l&#39;on remplit progressivement
+mylist3[[&#39;A&#39;]] &lt;-  seq(2,10,by=3)
+mylist3[[&#39;B&#39;]] &lt;-  matrix(1:8,ncol=2)
+mylist3[[&#39;C&#39;]] &lt;-  factor(c(&quot;M&quot;,&quot;M&quot;,&quot;F&quot;,&quot;M&quot;,&quot;F&quot;,&quot;M&quot;,&quot;M&quot;,&quot;M&quot;))
+mylist3[[&#39;D&#39;]] &lt;-  ordered(c(&quot;débutant&quot;,&quot;débutant&quot;,&quot;champion&quot;,
+                     &quot;champion&quot;,&quot;moyen&quot;,&quot;moyen&quot;,&quot;moyen&quot;,&quot;champion&quot;),
+                   levels=c(&quot;débutant&quot;,&quot;moyen&quot;,&quot;champion&quot;))
+
+
+</code></pre>
+<ul>
+<li>On peut aussi transformer un dataframe en une liste en utilisant la fonction <em>as.list</em></li>
+</ul>
+<pre class="{r}"><code>mylist4 &lt;- as.list(df_1)
+names(mylist4)</code></pre>
+<h5 id="extraction-des-éléments"><FONT color='#000033'> 2.2 Extraction des éléments </FONT></h5>
+<ul>
+<li>extraction d’une élément. Nous voulons:
+<ul>
+<li>extraire l’élément “matrice”</li>
+<li>transformer cette matrice en un dataframe</li>
+<li>affecter des noms aux colonnes (A et B) et aux lignes du dataframe (P_1 à P_4)</li>
+<li>intégrer ce dataframe à la liste sous le nom “mydata” et effacer de la liste l’élément “matrice”</li>
+</ul></li>
+</ul>
+<pre class="{r}"><code># extraction
+mat &lt;- mylist$matrice
+# conversion
+df &lt;- data.frame(mat)
+# affectation des noms lignes et colonnes
+names(df) &lt;- c(&#39;A&#39;,&#39;B&#39;) ; rownames(df) &lt;- paste0(&#39;P_&#39;,1:nrow(df) )
+# intégrer dans le dataframe dans la liste
+mylist[[&#39;mydata&#39;]] &lt;- df
+# effacer l&#39;élément matrice
+mylist$matrice &lt;- NULL
+
+mylist</code></pre>
+<ul>
+<li>extraction d’un sous élément . Nous voulons extraire les secondes et troisième ligne de la colonne B du dataframe “mydata”</li>
+</ul>
+<pre class="{r}"><code>res1 &lt;- mylist$mydata[c(2:4),2]
+# ou bien
+res2 &lt;- mylist[[&#39;mydata&#39;]][c(2:4),2]
+# ou bien
+res3 &lt;- mylist[[&#39;mydata&#39;]][c(&#39;P_2&#39;,&#39;P_3&#39;,&#39;P_4&#39;),c(&#39;B&#39;)]
+# les résultats ont identiques
+
+</code></pre>
+<h5 id="sélection-des-éléments"><FONT color='#000033'> 2.3 Sélection des éléments </FONT></h5>
+<ul>
+<li>Nous pouvons sélectionner des sous éléments avec des fonctions comme nous l’avons vu avec les dataframes. Par exemple nous voulons calculer le nombre de ‘M’ dans la variable “facteur”</li>
+</ul>
+<pre class="{r}"><code>n &lt;- length(mylist[[&#39;facteur&#39;]] == &#39;M&#39;) ; n</code></pre>
+<ul>
+<li>Nous voulons sélectionner les valeurs &gt; 6 de l’élément “matrice” sur la colonne B</li>
+</ul>
+<pre class="{r}"><code># l&#39;écriture est un peu plus compliquée;  attention à bien positionner les crochets !
+temp &lt;- mylist[[&#39;mydata&#39;]][ mylist[[&#39;mydata&#39;]]$B &gt; 6,] ; temp
+</code></pre>
+<p>hr style=“border: 1px solid gray”&gt;</p>
+<h4 id="tables"><FONT color='#000033'> 3. Tables </FONT></h4>
+<h5 id="dénombrement"><FONT color='#000033'> 3.1 Dénombrement </FONT></h5>
+<ul>
+<li>Lorsque nous sommes en présence ds variables catégorielles, il est souvent utile de réaliser un dénombrement des différents niveau de facteur. Dans un premier temps nous créons un dataframe composé de deux variables catégorielles. La fonction <em>table</em> permet d’effectuer le dénombrement et la fonction <em>prop.table</em> calcule les proportions correspondantes</li>
+</ul>
+<pre class="{r}"><code>set.seed(1234)
+var_6 &lt;- ifelse(runif(100,min = 0, max = 1) &lt;= 0.5 , 1, 0)
+var_7 &lt;- ifelse(runif(100,min = 10, max = 50) &lt;= 35, 0, 1)
+
+df_cat &lt;- data.frame(&#39;Diag&#39;    = factor(var_6, levels = c(0,1), labels = c(&#39;OUI&#39;,&#39;NON&#39; )),
+                     &#39;Statut&#39;  = factor(var_7, levels = c(1,0), labels = c(&#39;M&#39;,&#39;NM&#39; ))
+                    )
+
+# dénombrent variable Diag
+table(df_cat$Diag)
+# proportions correspondantes
+prop.table(table(df_cat$Diag))
+
+# dénombrent variable Statut
+table(df_cat$Statut)
+# proportions correspondantes
+prop.table(table(df_cat$Statut))
+</code></pre>
+<h5 id="croisement-de-deux-variables"><FONT color='#000033'> 3.2 Croisement de deux variables </FONT></h5>
+<p>Le croisement de deux variables catégorielles permet de calculer le nombre d’observations pour chaque niveau de facteur des deux variables</p>
+<pre class="{r}"><code>table(df_cat$Diag, df_cat$Statut )
+# calcul en fréquence
+prop.table(table(df_cat$Diag, df_cat$Statut ))
+</code></pre>
+<p>Avec la fonction <em>prop.table</em>, nous spécifierons une valeur pour l’argument “margin”. Si margin = 1, alors la fonction retourne les profils lignes. A titre d’exemple, pour chaque cellules les proportions seront calculées comme suit:</p>
+<ul>
+<li>cellule(OUI,M) = 16 /(29 + 16)<br />
+</li>
+<li>cellule(OUI,MN) = 29 /(29 + 16)<br />
+</li>
+<li>cellule(NON,M) = 24 /(24 + 31)<br />
+</li>
+<li>cellule(NON,M) = 31 /(22 + 31)</li>
+</ul>
+<pre class="{r}"><code>prop.table(table(df_cat$Diag, df_cat$Statut), margin = 1)</code></pre>
+<ul>
+<li>On peut extraire un élément pas son nom au sein d’une table, par exemple extraire la valeur de la cellule (‘OUI’,‘M’)</li>
+</ul>
+<pre class="{r}"><code>
+tab &lt;- prop.table(table(df_cat$Diag, df_cat$Statut ))
+tab[&#39;OUI&#39;,&#39;M&#39;]</code></pre>
