@@ -2057,8 +2057,8 @@ Oui
 </table>
 <p>On scinde le dataFrame et l’on crée un dataFrame X (prédicteur) et un
 vecteur des catégories à prédire (Y)</p>
-<pre class="r"><code># à compléter</code></pre>
-<pre class="r"><code># à compléter</code></pre>
+<pre class="r"><code>X &lt;- df[, -which(names(df) == &quot;Controle&quot;)]  # prédicteurs
+Y &lt;- df$Controle                             # variable à prédire</code></pre>
 <hr>
 <div id="probabilité-conditionnelle" class="section level5">
 <h5><FONT color="#000033"><FONT size="3"> 2.1 Probabilité conditionnelle
