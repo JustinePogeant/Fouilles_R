@@ -228,13 +228,15 @@ df %>% kable() %>% kable_styling(bootstrap_options = "striped", full_width = F)
 On scinde le dataFrame et l'on crée un dataFrame X (prédicteur) et un vecteur des catégories à prédire (Y)
 
 ```{r, echo = T}
-X <- df[, -which(names(df) == "Controle")]  # prédicteurs
-Y <- df$Controle                             # variable à prédire
+X <- df[, c("Salaire", "Impots", "Etudiant")]
+
+X
 ```
 
 
 ```{r, echo = F}
-
+Y <- df$Controle
+Y
 ```
 
 ```{r, echo = T}
@@ -247,7 +249,7 @@ Y <- df$Controle                             # variable à prédire
 
 ###### <FONT color='#000033'><FONT size =3> 2.1.1 Tableau de contingence </FONT> </FONT> 
 
-Dans un premier temp Nous cherchons ici à créer les tableaux de contingence entre les différentes variables du prédicteur et la variable à prédire. 
+Dans un premier temps Nous cherchons ici à créer les tableaux de contingence entre les différentes variables du prédicteur et la variable à prédire. 
 Nous créons ainsi 3 tableaux. A titre d'exemple, le tableau de contingence *contrôle* x *salaire* est le suivant: 
 
 
@@ -269,7 +271,11 @@ Si vous éprouver des difficultés, il est possible d’utiliser dans un premier
 les résultas R sont les suivants;
 
 ```{r, echo = T}
-# à compléter
+contingence <- lapply(X, function(x){
+  table   <- table(Y,x)
+})
+
+contingence
 ```
 
 ###### <FONT color='#000033'><FONT size =3> 2.1.2 Probabilités conditionnelles corrigées </FONT> </FONT> 
@@ -299,7 +305,18 @@ A partir des tableaux de contingence stockés dans la liste, nous obtenons la li
 Nous appelons cette nouvelle liste  *prop_cond*
 
 ```{r, echo = T}
-# à compléter
+m <- 1
+k <- length(unique(Y))
+
+prop_cond <- lapply(contingence, function(x){
+  tab_corr <- x + m
+  denom <- colSums(x) + m * k
+  sweep(tab_corr, 2, denom, FUN = "/")
+})
+
+names(prop_cond) <- names(X)
+
+prop_cond
 ```
 
 
@@ -328,11 +345,16 @@ Pour éviter les problèmes de débordement de capacité mémoire nous calculero
 Le jeu des données test est le suivant (*data_test*) :
 
 ```{r, echo = T}
-# à compléter
+data_test <- data.frame(
+  Salaire  = c('30 - 50', '> 50','< 30'),
+  Impots   = c('< 20', '> 20','< 20'),
+  Etudiant = c('Oui', 'Non','Oui')
+)
+
 ```
 
 ```{r, echo = T}
-# à compléter
+data_test
 ```
 
 ###### <FONT color='#000033'><FONT size = 3>  2.2.1 Appartenance *a priori* </FONT></FONT>
@@ -340,29 +362,43 @@ Le jeu des données test est le suivant (*data_test*) :
 La probabilité d'appartenance à priori correspond à la probabilité qu'un individus ait un contrôle ou non. Elle est calculée à partir des données entraînement.  Les résultats sont stockés dans un vecteur *priori*. De plus, on stocke le "nom" des catégories dans un vecteur(ici il s'agit simplement de 'Oui' et 'Non')
 
 ```{r, echo = T}
-# à compléter
+priori <- prop.table(table(Y))
+categories <- names(priori)
 ```
 
 ```{r}
-# à compléter
+priori
 ```
 ```{r}
-# à compléter
+categories
 ```
 
 
 Les probabilités d'affectation pour chaque individus test sont stockées dans une matrice. Les résultats sont les suivants :
 
 ```{r, echo = T}
+affectation <- matrix(0,
+                         nrow = nrow(data_test),
+                         ncol = length(categories))
+colnames(affectation) <- categories
 
-# à compléter
+for(i_test in 1:nrow(data_test)){
+  
+  lnV <- NULL
+  for(ic in 1:length(categories)){
+    somme <- 0
+    for(i in 1:ncol(X)){
+      ar <- prop_cond[[i]]
+      somme <- somme + log( ar[categories[ic], data_test[i_test, i]] )
 
-```
+    }
+    lnV <- c(lnV, log(priori[ic]) + somme)
+  }
+  
+  affectation[i_test, ] <- lnV
+}
 
-
-```{r, echo = T}
-
-# à compléter
+affectation
 ```
 
 Pour réalisér les calculs, la méthode est la suivante :
@@ -423,14 +459,40 @@ Cette fonction devra retourner la liste suivante:
 * priori étant le tableau des probabilités d'appartenance au groupes (contrôle = Oui, Contrôle = Non)
 
 ```{r, echo = T}
-# à compléter
+Naive_Bayes <- function(X, Y, m = 1){
+  
+  # tableau des a priori
+  priori <- prop.table(table(Y))
+  
+  # construction des tableaux de contingence
+  contingence <- lapply(X, function(v){
+    table(Y, v)
+  })
+  
+  k <- length(unique(Y))
+  
+  # correction + probas conditionnelles
+  prob_cond <- lapply(contingence, function(tab){
+    tab_corr <- tab + m
+    denom <- colSums(tab) + m * k
+    sweep(tab_corr, 2, denom, FUN = "/")
+  })
+  
+  names(prob_cond) <- names(X)
+  
+  # sortie
+  out <- list("prob_cond" = prob_cond, "priori" = priori)
+  return(out)
+}
+
 
 ```
 
 Les résultats sont les suivants:
 
 ```{r}
-# à compléter
+res_nb <- Naive_Bayes(X, Y)
+res_nb
 ```
 <br>
 
@@ -447,12 +509,46 @@ les résultats sont les suivants
 
 
 ```{r, echo = T}
-# à compléter
+Predict_Bayes <- function(prob_cond, priori, X_pred){
+  
+  categories <- names(priori)
+  log_post <- matrix(0, nrow = nrow(X_pred), ncol = length(categories))
+  colnames(log_post) <- categories
+  
+  for(i_test in 1:nrow(X_pred)){
+    
+    lnV <- NULL
+    
+    for(ic in 1:length(categories)){
+      
+      somme <- 0
+      
+      for(i in 1:ncol(X_pred)){
+        ar <- prob_cond[[i]]
+        classe <- categories[ic]
+        modal  <- X_pred[i_test, i]
+        somme  <- somme + log(ar[classe, modal])
+      }
+      
+      lnV <- c(lnV, log(priori[ic]) + somme)
+    }
+    
+    log_post[i_test, ] <- lnV
+  }
+  
+  prediction <- apply(log_post, 1, function(x){
+    names(x)[which.max(x)]
+  })
+  
+  out <- data.frame(log_post, Pred = prediction)
+  return(out)
+}
 ```
 
 
 ```{r}
-# à compléter
+resultat_pred <- Predict_Bayes(res_nb$prob_cond, res_nb$priori, X)
+resultat_pred
 ```
 
 
@@ -477,19 +573,25 @@ Le jeux de données comprend 12 attributs et 4000 instances (fichier *data_test.
 
 On charge le fichier
 ```{r}
-# à compléter
+load("data_test.Rda") 
 ```
 
 En utilisant les scripts, vous devez obtenir les probabilités conditionnelles suivantes 
 
 ```{r, echo = T}
-# à compléter
+X <- data_test[,1:11]
+y <- data_test[,12] 
+resultat <- Naive_Bayes(X, y, m = 1)
+
+print(resultat)
+
 ```
 
 On réalise maintenant la prédiction sur le jeux de données. Attention les calculs peuvent durer plusieurs minutes compte tenu du nombre d'instances !
 
 ```{r}
-# à compléter
+prediction <- Predict_Bayes(resultat$prob_cond, resultat$priori, X)
+table(prediction$Pred, y)
 ```
 
 
@@ -499,8 +601,12 @@ Nous utilisons maintenant la fonction NaivesBaye du paquet e1071
 
 ```{r}
 
-# à compléter
+library(e1071)
 
+model <- naiveBayes(event ~ ., data = data_test)
+prediction2 <- predict(model, data_test)
+
+confusionMatrix(prediction2, data_test$event)
 ```
 
 Les résultats doivent être les mêmes.... ce qui prouve que vous avez bien travaillé !
