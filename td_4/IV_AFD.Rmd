@@ -1,0 +1,426 @@
+---
+title: "<FONT color='#0066CC'><FONT size = 4 ><DIV align= center> AP-4209 ESIEE-Paris: 2024 - 2025 </DIV></FONT></FONT>"
+output:
+  html_document:
+    highlight: textmate
+    theme: readable
+    toc: yes
+    toc_depth: 6
+    toc_float: yes
+---
+
+
+<style type="text/css">
+body, td {font-size: 15px;}
+code.r{font-size: 5px;}
+pre { font-size: 12px;}
+</style>
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+<FONT color='#0066CC'><FONT size = 4 >
+
+::: {align="center"}
+Fouille de données avec R pour la data science et l'intelligence artificielle\
+
+TD 4 : Partie II - ANALYSE FACTORIELLE DISCRIMINANTE   
+
+--Classification supervisée--
+:::
+
+</FONT></FONT>
+
+<FONT color='#0066CC'><FONT size = 4 >
+
+::: {align="center"}
+Badr TAJINI -- ESIEE Paris\
+Source : Bertrand Roudier -- ESIEE Paris
+:::
+
+</FONT></FONT>
+
+
+<hr style="border: 1px  solid gray">
+
+</hr>
+
+<DIV align = justify>
+
+<!--- /////////////////////////////////////////////////////////////////////--->
+### <FONT color='#0066CC'><FONT size = 4> 1. Introduction </FONT></FONT>
+
+Ce TD a pour objectif de réaliser la classification supervisée à l'aide de l'analyse factorielle discriminante.
+
+Dans le précédent TD, nous avons réalisé: 
+
+* Une diminution de dimension en calculant des axes de projections qui maximisent la dispersion inter groupe. Les vecteurs directeurs de ces axes factoriels correspondent aux vecteurs propres normalisés de la matrice : $\frac{B}{W}$ (méthode Anglo-saxone)   
+
+* Les statistiques inférentielles relatives à la discrimination des groupes selon les axes (tests de Wilks)
+
+* Le calcul des Scores. Ces derniers correspondent à la représentation des individus dans le plan formé par les (deux) premiers axes factoriels
+
+Dans ce TD final, nous allons réaliser une classification de chaque individu dans le plan factoriel. Pour y parvenir: 
+
+* Nous calculons le centre de gravité de chaque groupe dans le plan factoriel.
+* Pour chaque individu, nous calculons les distances le séparant des centres de chaque groupe.  
+* Nous affectons l'individu à la classe dont le centre de gravité est le plus proche.  
+
+Pour évaluer la  qualité de la méthode de classification, nous réalisons une matrice de confusion. 
+
+<U> **Rmq** </U>:  *Ce type de classification est possible que si la statistique montre préalablement l'existence significative d'une discrimination des groupes selon les axes factoriels*
+
+
+<!--- /////////////////////////////////////////////////////////////////////--->
+
+</FONT></FONT>
+
+<hr style="border: 1px  solid gray">
+
+</hr>
+
+### <FONT color='#0066CC'><FONT size = 4> 2. Prérequis </FONT></FONT>
+
+
+Nous effectuons la classification en reprenant dans un premier temps les données <VIN_QUALITES.txt>. Vous utiliserez les fonctions que vous avez développées dans le TD précédent (*MANOVA* et *AFD*)   
+Pour rappel, la fonction (*AFD* ) retourne une liste avec les Scores (coordonnées des individus sur les axes factoriels).
+
+
+```{r, echo = T, warning=F, message=F}
+# Chargement des packages
+library(ggplot2)
+library(dplyr)
+library(caret)
+library(kableExtra)
+dataset <- read.table('VIN_QUALITE.txt', header = T)
+
+dataset %>%
+  kbl(digits = 2) %>%
+  kable_styling(
+    bootstrap_options = "striped",
+    full_width = FALSE
+  ) %>%
+  scroll_box(height = "250px")
+```
+
+* La fonction permettant de réaliser le graphique est la suivante
+
+
+```{r, echo = T}
+MANOVA <- function(data, group_var) {
+  
+  X <- data %>% dplyr::select(where(is.numeric))
+  Y <- as.factor(data[[group_var]])
+  
+  N <- nrow(X)
+  P <- ncol(X)
+  K <- length(levels(Y))
+  
+  XK <- split(X, Y)
+  NK <- sapply(XK, nrow)
+  GK <- lapply(XK, colMeans)
+  G  <- colMeans(X)
+  
+  Xc <- scale(X, center = TRUE, scale = FALSE)
+  SS_tot <- t(Xc) %*% Xc
+  
+  SS_Intra <- Reduce("+", lapply(XK, function(Xi) {
+    Xi_c <- scale(Xi, center = TRUE, scale = FALSE)
+    t(Xi_c) %*% Xi_c
+  }))
+  
+  SS_Inter <- SS_tot - SS_Intra
+  
+  Lambda <- det(SS_Intra) / det(SS_tot)
+  
+  m <- N - 1 - (P + K) / 2
+  V_corrigee <- -m * log(Lambda)
+  df <- P * (K - 1)
+  p_value <- 1 - pchisq(V_corrigee, df)
+  
+  list(
+    SS_tot = SS_tot,
+    SS_Intra = SS_Intra,
+    SS_Inter = SS_Inter,
+    GK = GK,
+    G = G,
+    NK = NK,
+    P = P,
+    N = N,
+    K = K,
+    Lambda = Lambda,
+    V_corrigee = V_corrigee,
+    df = df,
+    p_value = p_value
+  )
+}
+```
+
+
+
+
+```{r}
+AFD <- function(X, Y, SS_Intra, SS_Tot, SS_Inter, nb_axes = 2) {
+  
+  eig <- eigen(solve(SS_Intra) %*% SS_Inter)
+  valeurs_propres <- eig$values
+  vecteurs_propres <- eig$vectors
+  
+  vecteurs_propres_norm <- apply(vecteurs_propres, 2, function(v) v / sqrt(sum(v^2)))
+  
+  axes_factoriels <- vecteurs_propres_norm[, 1:nb_axes]
+  
+  Scores <- as.data.frame(as.matrix(X) %*% axes_factoriels)
+  colnames(Scores) <- paste0("AF", 1:nb_axes)
+  Scores$Groupe <- Y
+  
+  list(
+    Valeurs_propres = valeurs_propres[1:nb_axes],
+    Vecteurs_propres = axes_factoriels,
+    Scores = Scores
+  )
+}   
+```
+
+
+```{r}
+
+```
+
+
+```{r, echo = F}
+
+```
+
+
+Les Scores sont les suivants: 
+
+
+```{r}
+# Préparer les données
+X <- dataset %>% dplyr::select(where(is.numeric))
+Y <- as.factor(dataset$Qualite)
+
+# Standardiser les variables et convertir en data.frame
+X_scaled <- as.data.frame(scale(X, center = TRUE, scale = TRUE))
+
+# Ajouter la variable de groupe
+data_scaled <- cbind(X_scaled, Qualite = Y)
+
+# Calculer MANOVA
+manova_res <- MANOVA(data_scaled, "Qualite")
+SS_intra <- manova_res$SS_Intra
+SS_tot   <- manova_res$SS_tot
+SS_inter <- manova_res$SS_Inter
+
+# AFD sur les données standardisées
+res_afd <- AFD(X_scaled, Y, SS_tot, SS_intra, SS_inter, nb_axes = 2)
+res_afd$Scores %>%
+  kbl(digits = 3) %>%
+  kable_styling(
+    bootstrap_options = "striped",
+    full_width = FALSE,
+    position = "center",
+    latex_options = 'striped'
+  ) %>%
+  scroll_box(height = "350px")
+
+```
+
+<br>
+
+* La représentation des centres de gravité et des individus
+
+```{r}
+ggplot(res_afd$Scores, aes(x = AF1, y = AF2, color = Groupe)) +
+  geom_point(size = 2) +
+  stat_summary(fun = mean, geom = "point", shape = 3, size = 6, color = "black") +
+  labs(title = "Représentation des individus et des centres de gravité",
+       x = "Axe Factoriel 1",
+       y = "Axe Factoriel 2") 
+  theme_minimal()
+```
+
+
+#### <FONT color='#0066CC'><FONT size = 4> 3.2 Distances </FONT></FONT>
+
+
+* Nous calculons les distances euclidiennes de chaque individu aux différents centre de gravité de chaque groupe.
+
+```{r}
+Scores <- res_afd$Scores
+Y1 <- as.factor(Scores$Groupe)
+G_fac <- Scores %>%
+          group_by(Groupe) %>%
+          summarise(AF1 = mean(AF1), AF2 = mean(AF2))
+
+Sc <- as.matrix(Scores[,1:2])
+
+distances <- sapply(c(1:nlevels(Y1)), function(i)
+                 {  
+                    # on sélectionne le centre de gravité
+                    Gt <- as.matrix(G_fac[i,2:3])
+                    # on crée une matrice  pour calculer la différence matricielle entre les observations et le centre de gravité
+                    Gt <- matrix(Gt, nrow = nrow(Scores), ncol = 2,  byrow = T)
+                    # on calcule les distances
+                    apply((Sc - Gt)^2 ,1,function(x) {return( sqrt(sum(x)))})
+})
+
+distances <- data.frame(distances) ; names(distances) <- levels(Y1)
+
+distances %>% kbl(digits=3) %>%
+        kable_styling(bootstrap_options = "striped", full_width = F, position = "center", latex_options = 'stripped') %>%  scroll_box( height = "250px")
+```
+
+<br>
+
+
+* Comme le montre la figure, L'affectation d'un individu correspond à la distance minimale entre cet individu et le centre de gravité d'un groupe (figure = groupe 3)
+
+
+<br>
+
+
+```{r, echo=FALSE, fig.width = 5, fig.height = 5, fig.align = 'center'}
+knitr::include_graphics('Distance.jpg')
+```
+
+
+<!------------------------------------------------------------------------->
+#### <FONT color='#0066CC'><FONT size = 4> 3.3 Classification </FONT></FONT>
+
+Le dataframe suivant compare la classification obtenue par l'AFD et les observations (Gold Standard)
+
+
+```{r}
+classification <- data.frame(Observations = Y1,
+                             AFD_Classif = apply(distances, 1, function(x) {return( colnames(distances)[which.min(x)] ) } )
+) 
+classification %>% kbl(digits=3) %>%
+        kable_styling(bootstrap_options = "striped", full_width = F, position = "center", latex_options = 'stripped') %>%  scroll_box( height = "250px")
+
+  # à compléter
+```
+
+#### <FONT color='#0066CC'><FONT size = 4> 3.4 Qualité </FONT></FONT>
+
+* Nous pouvons maintenant réaliser la matrice des confusions en utilisant la fonction *confusionMatrix* du package *caret*
+
+```{r, message =FALSE}
+confusion <- confusionMatrix(as.factor(classification$AFD_Classif),
+                             as.factor(classification$Observations)
+                             )
+confusion$table %>% kbl(digits=3) %>%
+        kable_styling(bootstrap_options = "striped", full_width = F, position = "center", latex_options = 'stripped') %>%  scroll_box( height = "250px")
+# à compléter
+```
+
+<!------------------------------------------------------------------------->
+#### <FONT color='#0066CC'><FONT size = 4> 3.5 Encapsulation </FONT></FONT>
+
+* On construit une fonction ( que nous appelerons *AFD_Classif*) et qui "encapsule" le code 
+
+La fonction doit retourner :
+
+* les centre de gravités
+* les distances de chaque individus aux centre des classes (groupes)
+* la comparaison entre la classification réalisée par l'AFD et le gold standard
+* la matrice de confusion (obtenue à l'aide de la fonction caret)
+
+```{r}
+AFD_Classif <- function(Scores, Y1)
+{ 
+  #-> centre de gravité
+  G_fac  <- aggregate(Scores[,-3], by = list(Scores$Class ), mean)
+  
+  #-> on ôte la première colonne 
+  Sc <- as.matrix(Scores[,1:2])
+  
+  #-> calcule des distances
+  distances <- sapply(c(1:nlevels(Y1)), function(i)
+                 {  
+                    # on sélectionne le centre de gravité
+                    Gt <- as.matrix(G_fac[i,2:3])
+                    # on crée une matrice  pour calculer la différence matricielle entre les observations et le centre de gravité
+                    Gt <- matrix(Gt, nrow = nrow(Scores), ncol = 2,  byrow = T)
+                    # on calcule les distances
+                    apply((Sc - Gt)^2 ,1,function(x) {return( sqrt(sum(x)))})
+                  })
+
+  #-> affectation des noms des groupes
+  distances <- data.frame(distances) ; names(distances) <- levels(Y1)
+  
+  #-> matrice des comparaisons
+  classif <- apply(distances,1, function(x) names(x)[which.min(x)])
+  compare <- data.frame('classif' = factor(classif), 'gold_st' = Y1)
+  
+  #-> matrice des confusions
+  conf <- confusionMatrix(compare$classif, compare$gold_st)                    
+
+  return(list(centroid  = G_fac,
+              distances = distances,
+              classif   = compare,
+              confusion = conf))
+    
+}
+```
+
+<!--------------------------------------------------------------------->
+### <FONT color='#0066CC'><FONT size = 4> 4. Déploiement </FONT></FONT>
+
+* Pour déployer le code, on utilisera le fichier *iris* fournit par défaut  dans R
+
+```{r, echo = T}
+data(iris)
+X_iris <- iris %>% dplyr::select(where(is.numeric))
+Y_iris <- as.factor(iris$Species)
+manova_iris <- MANOVA(iris, "Species")
+SS_intra_iris <- manova_iris$SS_Intra
+SS_tot_iris   <- manova_iris$SS_tot
+SS_inter_iris <- manova_iris$SS_Inter
+res_afd_iris <- AFD(X_iris, Y_iris, SS_tot_iris, SS_intra_iris, SS_inter_iris, nb_axes = 2)
+Scores_iris <- res_afd_iris$Scores
+Scores_iris$Class <- Y_iris
+class_iris <- AFD_Classif(Scores_iris, Y_iris)
+
+```
+Les résultats sur le fichier *iris* sont les suivants
+
+* Centres de gravité
+
+```{r}
+class_iris$centroid %>% kbl(digits=3) %>%
+        kable_styling(bootstrap_options = "striped", full_width = F, position = "center", latex_options = 'stripped') %>%  scroll_box( height = "250px")
+```
+
+<br> 
+
+* Distances 
+
+
+```{r}
+class_iris$distances %>% kbl(digits=3) %>%
+        kable_styling(bootstrap_options = "striped", full_width = F, position = "center", latex_options = 'stripped') %>%  scroll_box( height = "250px")
+```
+
+<br> 
+
+* Classification 
+
+
+```{r}
+class_iris$classif %>% kbl(digits=3) %>%
+        kable_styling(bootstrap_options = "striped", full_width = F, position = "center", latex_options = 'stripped') %>%  scroll_box( height = "250px")  
+```
+
+* Confusion
+
+```{r}
+class_iris$confusion$table %>% kbl(digits=3) %>%
+        kable_styling(bootstrap_options = "striped", full_width = F, position = "center", latex_options = 'stripped') %>%  scroll_box( height = "250px")
+# à compléter
+```
+
+
