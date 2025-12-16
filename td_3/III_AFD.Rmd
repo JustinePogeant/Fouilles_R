@@ -69,17 +69,46 @@ Ce TD a pour objectif de réaliser une analyse factorielle discriminante nous pe
 <br>
 
 ```{r, echo = T, warning=F, message=F}
-# à compléter
+rm(list = ls())
+library(kableExtra)
+library(ggplot2)
+library(dplyr)
+df <- read.table('td_3/VIN_QUALITE.txt', header = T)
 ```
 
 ```{r}
-# à compléter
+MANOVA <- function(X, Y) {
+  observations <- split(X, Y) # on sépare les données par groupe
+  # X ce sont nos variables et Y nos classes
+  Moyennes <- lapply(observations, function(x) sapply(x, mean)) # on calcule les moyennes de chaque groupe
+  Moyenne_globale <- sapply(X, mean)
+  #les dimensions
+  col <- ncol(X) #nombre de variables
+  lignes <- nrow(X) #nombre d'observations
+  
+  # dispersion_tot --> variation totale des données
+  #==> pour mesurer la dispersion totale des données autour de la moyenne globale : A quel point les données sont éloignées de la moyenne globale
+  dispersion_tot <- (lignes - 1) * cov(X)
+  
+  # dispersion_intra_grp --> variation À L'intérieur de chaque groupe
+  dispersion_intra_grp <- matrix(0, col, col)
+  for(i in 1:length(observations)) {
+    dispersion_intra_grp <- dispersion_intra_grp + (nrow(observations[[i]]) - 1) * cov(observations[[i]])
+  }
+  
+  # dispersion_inter ==> variation entre les groupes
+  dispersion_inter <- dispersion_tot - dispersion_intra_grp
+  
+  return(list(dispersion_tot = dispersion_tot, dispersion_intra_grp = dispersion_intra_grp, dispersion_inter = dispersion_inter))
+}
 ```
 
 
 ```{r}
 
-# à compléter
+X <- df[, -ncol(df)]  # Variables prédictives sauf la dernière
+Y <- df[, ncol(df)]   # Variable à prédire == la dernière colonne
+Resultat <- MANOVA(X, Y)
 
 ```
 
@@ -88,7 +117,7 @@ Les résultats sont les suivants:
 * La somme des carrés totaux :  *SS <SUB>Tot</SUB>*
 
 ```{r}
-# à compléter
+Resultat$dispersion_tot
 ```
 
 <br> 
@@ -96,7 +125,7 @@ Les résultats sont les suivants:
 * La somme des carrés intra : *SS <SUB>Intra</SUB>*
 
 ```{r}
-# à compléter
+Resultat$dispersion_intra_grp
 ```
 
 
@@ -105,7 +134,7 @@ Les résultats sont les suivants:
 * La somme des carrés inter : *SS <SUB>Inter</SUB>*
 
 ```{r}
-# à compléter
+Resultat$dispersion_inter
 ```
 
 
@@ -121,7 +150,7 @@ Comme nous l'avons vu en cours, l'analyse factorielle discriminante consiste à 
 
 
 ```{r, echo=FALSE, fig.width = 4, fig.height = 4, fig.align = 'center'}
-knitr::include_graphics('AFD_Axe_Facto.jpg')
+knitr::include_graphics('td_3/AFD_Axe_Facto.jpg')
 ```
 
 <br> 
@@ -161,7 +190,8 @@ Attention la fraction ici correspond à une *division matricielle* et non à une
 
 Le résultat est le suivant : 
 ```{r}
-# à compléter
+div_mat <- Resultat$dispersion_inter %*% solve(Resultat$dispersion_intra_grp)
+div_mat
 ```
 
 <br>
@@ -183,7 +213,9 @@ Comme en ACP, les valeurs propres correspondent à la part de dispersion expliqu
 * Matrice des vecteurs propres *U*
 
 ```{r}
-# à compléter
+diago <- eigen(div_mat)
+D <- Re(diago$vectors)  # avec Re, on garde juste la partie réelle
+D
 ```
 
 
@@ -201,7 +233,8 @@ Contrairement à l'ACP où nous diagonalisons une matrice symétrique (matrice d
 
 ```{r}
 
-# à compléter
+norm_mat <- sqrt(diag(t(D) %*% Resultat$dispersion_intra_grp %*% D))
+norm_mat
 ```
 
 
@@ -210,7 +243,8 @@ Contrairement à l'ACP où nous diagonalisons une matrice symétrique (matrice d
 * La matrice des vecteurs propres normalisées *Un* est:
 
 ```{r}
-# à compléter
+Vect_normalise <- sweep(D, 2, norm_mat, "/")
+Vect_normalise
 ```
 
 
@@ -224,7 +258,8 @@ Contrairement à l'ACP où nous diagonalisons une matrice symétrique (matrice d
 
 
 ```{r}
-# à compléter
+sans_partie_im <- Re(diago$values)
+sans_partie_im
 ``` 
 
   * De manière analogue à l'ACP, les valeurs propres correspondent à la variance expliquée par les axes. Les variances expliquées par les deux derniers axes sont égales à 0. Dans certains cas, les valeur propres peuvent être négatives (ce qui incohérent car il s'agit de variances!) et de très faible valeur (inférieures à 10-7). *Il s'agit d'une erreur de virgule flottante imputable aux calculs itératifs nécessaires à l'estimation des valeurs propres*. Dans ce contexte, on considère ces valeurs comme nulles.  
@@ -238,7 +273,8 @@ Contrairement à l'ACP où nous diagonalisons une matrice symétrique (matrice d
 Les parts de dispersion sont les suivantes :
 
 ```{r}
-# à compléter
+disp <- sans_partie_im / sum(sans_partie_im)
+disp
 ```
 
 
@@ -267,12 +303,15 @@ Nous créons un data.frame *Scores_df* qui inclue les coordonnées des individus
 <br>
 
 ```{r, echo = F}
-# à compléter
+centree <- scale(X, center = TRUE, scale = FALSE) # on centre les données
 ```
 
 
 ```{r, echo = F}
-# à compléter
+Scores <- centree %*% Vect_normalise
+Scores_df <- data.frame(Scores[, 1:2], Class = Y) # on garde que les deux premiers axes
+colnames(Scores_df) <- c("Axe1", "Axe2", "Class") # on nomme les colonnes
+head(Scores_df)
 ```
 
 <br> 
@@ -282,12 +321,23 @@ Nous utilisons la fonction *AFD_graph1*  (fournie ci dessous) pour représenter 
 <br>
 
 ```{r, echo = T}
-# à compléter
+AFD_graph1 <- function(Scores_df) {
+  centroids <- Scores_df %>%
+    group_by(Class) %>%
+    summarise(Axe1 = mean(Axe1), Axe2 = mean(Axe2))
+  
+  ggplot(Scores_df, aes(x = Axe1, y = Axe2, color = as.factor(Class))) +
+    geom_point(size = 2) +
+    geom_point(data = centroids, aes(x = Axe1, y = Axe2), 
+               shape = 23, size = 4, fill = "white") +
+    labs(x = "Axe 1", y = "Axe 2", color = "Classe") +
+    theme_minimal()
+}
 
 ```
 
 ```{r}
-# à compléter
+AFD_graph1(Scores_df)
 ```
 
 
@@ -306,7 +356,8 @@ Pour y parvenir, nous calculons les corrélations canoniques de chaque axe. Soit
 
 les corrélations canoniques des deux premiers axes sont:  
 ```{r}
-# à compléter
+eta2 <- disp / (1 + disp)
+eta2[1:2]
 ```
 
 Dans ce TD, nous allons simplifier les hypothèses. Sous Ho, nous posons que les corrélations canoniques des axes factoriels retenus sont égales à zero *versus* H1: au moins une des corrélations différent.  
@@ -343,7 +394,23 @@ avec:
 Pour les deux premiers axes retenus *(axe_selected = 2)*, L'ensemble des résultats de l'ADF sont résumés dans le tableau :
 
 ```{r}
-# à compléter
+n <- nrow(X) # nombre d'observations total
+p <- ncol(X) #nombre de variables
+k <- length(unique(Y)) #nombre de classes
+axe_selected <- 2
+
+Wilks <- prod(1 - eta2[1:axe_selected])
+chi2_stat <- -(n - 1 - (p + k)/2) * log(Wilks)
+df <- p * (k - 1)
+p_value <- pchisq(chi2_stat, df, lower.tail = FALSE)
+
+resultat_wilks <- data.frame(
+  Lambda_Wilks = Wilks,
+  Chi2 = chi2_stat,
+  ddl = df,
+  P_value = p_value
+)
+resultat_wilks
 
 ```
 
@@ -398,16 +465,63 @@ Le data frame des Scores calculés à partir da la fonction *AFD* corresppondent
 Le script final (avec les résultats) doit être le suivant :
 
 ```{r}
-# à compléter
+AFD <- function(X, Y, dispersion_tot, dispersion_intra_grp, dispersion_inter, nb_axes = 2) {
+  # Matrice diago
+  diago <- dispersion_inter %*% solve(dispersion_intra_grp)
+  
+  # Diagonalisation
+  eigen_res <- eigen(diago)
+  D <- Re(eigen_res$vectors)
+  sans_partie_im <- Re(eigen_res$values)
+  
+  # Normalisation
+  norm_factor <- sqrt(diag(t(D) %*% dispersion_intra_grp %*% D))
+  Vect_normalise <- sweep(D, 2, norm_factor, "/")
+  
+  # Scores
+  Z <- scale(X, center = TRUE, scale = FALSE)
+  Scores <- Z %*% Vect_normalise
+  Scores_df <- data.frame(Scores[, 1:nb_axes], Class = Y)
+  colnames(Scores_df)[1:nb_axes] <- paste0("Axe", 1:nb_axes)
+  
+  # Test de Wilks
+  eta2 <- sans_partie_im / (1 + sans_partie_im)
+  n <- nrow(X)
+  p <- ncol(X)
+  k <- length(unique(Y))
+  
+  Wilks <- prod(1 - eta2[1:nb_axes])
+  chi2_stat <- -(n - 1 - (p + k)/2) * log(Wilks)
+  df <- p * (k - 1)
+  p_value <- pchisq(chi2_stat, df, lower.tail = FALSE)
+  
+  resultat_wilks <- data.frame(
+    Lambda_Wilks = Wilks,
+    Chi2 = chi2_stat,
+    ddl = df,
+    P_value = p_value
+  )
+  
+  # Inertie
+  disp <- sans_partie_im / sum(sans_partie_im)
+  
+  return(list(
+    Loading_factors = Vect_normalise,
+    Valeurs_propres = sans_partie_im,
+    Inertie = disp,
+    Scores = Scores_df,
+    Test_Wilks = resultat_wilks
+  ))
+}
 
 ```
 
 
 ```{r, echo = T}
-# à compléter
+Resultat_AFD <- AFD(X, Y, Resultat$dispersion_tot, Resultat$dispersion_intra, Resultat$dispersion_inter, nb_axes = 2)
+AFD_graph1(Resultat_AFD$Scores)
 
 ```
-
 
 ### <FONT color='#0066CC'><FONT size = 4> 5. Application </FONT></FONT>
 
@@ -416,15 +530,23 @@ Pour valider votre fonction, vous utiliserez le fichier iris fourni par défaut 
 Les résultats sont les suivants :
 
 ```{r}
-# à compléter
+data(iris)
+X_iris <- iris[, 1:4]
+Y_iris <- iris[, 5]
+Resultat_iris <- MANOVA(X_iris, Y_iris)
+Resultat_AFD_iris <- AFD(X_iris, Y_iris, Resultat_iris$dispersion_tot, Resultat_iris$dispersion_intra, Resultat_iris$dispersion_inter, nb_axes = 2)
 
 ```
-
 
 * Matrice des vecteurs propres normalisées  
 
 ```{r}
-# à compléter
+Resultat_AFD_iris <- AFD(X_iris, Y_iris, 
+                    Resultat_iris$dispersion_tot, 
+                    Resultat_iris$dispersion_intra, 
+                    Resultat_iris$dispersion_inter, 
+                    nb_axes = 2)
+Resultat_AFD_iris$Loading_factors
 ```
 
 <br> 
@@ -432,7 +554,7 @@ Les résultats sont les suivants :
 * Vecteurs propres  
 
 ```{r}
-# à compléter
+Resultat_AFD_iris$Valeurs_propres
 ```
 
 <br>
@@ -440,7 +562,7 @@ Les résultats sont les suivants :
 * Scores  
 
 ```{r}
-# à compléter
+head(Resultat_AFD_iris$Scores)
 ```
 
 <br>
@@ -448,7 +570,7 @@ Les résultats sont les suivants :
 * Tests MANOVA axes factoriels  
 
 ```{r}
-# à compléter
+Resultat_AFD_iris$Test_Wilks
 ```
 
 
