@@ -1,0 +1,9 @@
+install.packages(c(
+  "tidyverse",
+  "tm",
+  "SnowballC",
+  "e1071",
+  "caret",
+  "wordcloud",
+  "ggplot2"
+))

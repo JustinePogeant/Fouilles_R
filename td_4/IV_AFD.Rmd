@@ -187,6 +187,7 @@ AFD <- function(X, Y, SS_Intra, SS_Tot, SS_Inter, nb_axes = 2) {
 
 ```{r}
 
+
 ```
 
 
