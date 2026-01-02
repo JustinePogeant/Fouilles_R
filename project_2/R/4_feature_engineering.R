@@ -35,24 +35,14 @@ dtm_train <- DocumentTermMatrix(collection_train,  # documentTermMatrix = tablea
                                   stopwords = TRUE
                                 ))
 
-print(paste("dim de la matrice TF-IDF:", dim(dtm_train)[1], "documents x", dim(dtm_train)[2], "termes"))
-
-# on supprime les termes inutiles pour réduire la taille (< 0.5% des documents)
-dtm_train <- removeSparseTerms(dtm_train, 0.995)
-print(paste("Après réduction des mots inutiles:", dim(dtm_train)[1], "documents x", dim(dtm_train)[2], "termes"))
-
 # on converti en matrice ==> pouor ensuite le dataframe
 tfidf_matrix <- as.matrix(dtm_train) # lignes = tweets, colonnes = mots importants
-print(paste("matrice utilisable:", nrow(tfidf_matrix), "x", ncol(tfidf_matrix)))
 
 # on ajoute 1 colonnes pour les labels de sentiment
 sentiment_labels <- train_data_grouped$Sentiment
 
 # on créé avec notre matrice un dataframe pour l'AFD
 dataframe_tfidf <- data.frame(tfidf_matrix, Sentiment = sentiment_labels)
-
-# on va vérifier qu'il n'y a pas de valeurs manquantes
-print(paste("nb valeurs manquantes:", sum(is.na(dataframe_tfidf))))
 
 # on va supprimer les lignes avec uniquement des zéros (tweets vides après nettoyage)
 row_sums <- rowSums(tfidf_matrix)
@@ -63,8 +53,6 @@ dataframe_tfidf <- dataframe_tfidf[non_empty_rows, ]
 table(dataframe_tfidf$Sentiment)
 
 # on visualise la matrice TF-IDF
-print("\naperçu de la matrice TF-IDF")
-print("les termes avec les scores TF-IDF les plus élevés:")
 term_scores <- colSums(tfidf_matrix[non_empty_rows, ])
 higher_terms <- sort(term_scores, decreasing = TRUE)[1:20]
 print(higher_terms)

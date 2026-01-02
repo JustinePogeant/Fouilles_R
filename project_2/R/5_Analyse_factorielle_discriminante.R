@@ -54,7 +54,7 @@ lda_pred_train <- predict(lda_model, newdata = X_train)
 # on applique le modèle LDA aux  données de test
 lda_pred_test <- predict(lda_model, newdata = X_test)
 
-# Créer les dataframes avec les coordonnées projetées
+# on crée les dataframes avec les coordonnées projetées
 lda_train_proj <- data.frame(
   LD1 = lda_pred_train$x[, 1],
   LD2 = lda_pred_train$x[, 2],
@@ -73,10 +73,10 @@ lda_test_proj <- data.frame(
   Type = "Test"
 )
 
-print("Aperçu du dataframe (Training):")
+print("on regarde le dataframe training")
 print(head(lda_train_proj))
 
-print("\nAperçu du dataframe (Test):")
+print("\non regarde le dataframe test")
 print(head(lda_test_proj))
 
 # on va juste sauvegarder les projections pour la visualisation

@@ -23,19 +23,17 @@ validation_data <- validation_data %>%
   mutate(TweetText_clean = clean_text(TweetText))
 
 # on comparaison avant et après le nettoyage
-print("comparaison avant et après le nettoyage")
-comparison <- train_data %>%
+comparaison <- train_data %>%
   filter(Sentiment == "Positive") %>%
   dplyr::select(TweetText, TweetText_clean) %>%
   head(5)
 
 print("AVANT:")
-print(comparison$TweetText)
+print(comparaison$TweetText)
 print("APRÈS:")
-print(comparison$TweetText_clean)
+print(comparaison$TweetText_clean)
 
 # on enlève les mots vides
-print("supression des mots vides")
 data("stop_words")  # Stopwords en anglais c'est les mots vides
 
 # on supprime des mots vides
