@@ -10,8 +10,6 @@ if(!require(gridExtra)) {
   library(gridExtra)
 }
 
-print("on visualise les résultats de l'AFD")
-
 # Palette de couleurs
 couleurs <- c("Positive" = "#2ECC71",
               "Negative" = "#E74C3C",
@@ -70,7 +68,7 @@ var_df <- data.frame(
   Variance = proportions * 100
 )
 
-p_variance <- ggplot(var_df, aes(x = Axe, y = Variance)) +
+graph_variance <- ggplot(var_df, aes(x = Axe, y = Variance)) +
   geom_col(fill = "steelblue", width = 0.6) +
   geom_text(aes(label = paste0(round(Variance, 1), "%")), 
             vjust = -0.5, size = 5, fontface = "bold") +
@@ -87,7 +85,7 @@ p_variance <- ggplot(var_df, aes(x = Axe, y = Variance)) +
     plot.subtitle = element_text(hjust = 0.5, size = 11)
   )
 
-print(p_variance)
+print(graph_variance)
 
 
 # on crée un quatrième graphique pour les centroïdes
@@ -101,7 +99,6 @@ centroides <- lda_all_proj %>%
     .groups = "drop"
   )
 
-print("les centroïdes des sentiments:")
 print(centroides)
 
 # le graphique des centroïdes
@@ -117,7 +114,7 @@ graph_centroides <- ggplot(lda_all_proj, aes(x = LD1, y = LD2)) +
   scale_color_manual(values = couleurs) +
   theme_minimal() +
   labs(
-    title = "Projection AFD avec centroïdes des sentiments",
+    title = "Projection de l'AFD avec centroïdes pour les sentiments",
     subtitle = "Les losanges indiquent le centre de chaque groupe",
     x = "LD1",
     y = "LD2",
@@ -133,13 +130,12 @@ print(graph_centroides)
 
 # on sauvegarde les graphiques
 
-# Sauvegarder les graphiques en PNG haute résolution
-ggsave("project_2/figure1_projection_ellipses.png", plot = p_2d_ellipses, 
+ggsave("project_2/figure1_projection_ellipses.png", plot = ellipses, 
        width = 12, height = 8, dpi = 300)
 
-ggsave("project_2/figure2_variance_expliquee.png", plot = p_variance, 
+ggsave("project_2/figure2_variance_expliquee.png", plot = graph_variance, 
        width = 10, height = 7, dpi = 300)
 
-ggsave("project_2/figure3_centroides.png", plot = p_centroides, 
+ggsave("project_2/figure3_centroides.png", plot = graph_centroides, 
        width = 12, height = 8, dpi = 300)
 
