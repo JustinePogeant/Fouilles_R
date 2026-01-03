@@ -16,29 +16,8 @@ couleurs <- c("Positive" = "#2ECC71",
               "Neutral" = "#95A5A6",
               "Irrelevant" = "#F39C12")
 
-# on crée un premier graphique 2D de base
 
-graph1 <- ggplot(lda_all_proj, aes(x = LD1, y = LD2, color = Sentiment_Real)) +
-  geom_point(alpha = 0.3, size = 1) +
-  scale_color_manual(values = couleurs) +
-  theme_minimal() +
-  labs(
-    title = "Projection AFD des tweets sur les 2 premiers axes discriminants",
-    subtitle = paste0("LD1 (", round(proportions[1]*100, 1), "%) vs LD2 (", 
-                      round(proportions[2]*100, 1), "%)"),
-    x = paste0("LD1 (", round(proportions[1]*100, 1), "% de variance)"),
-    y = paste0("LD2 (", round(proportions[2]*100, 1), "% de variance)"),
-    color = "Sentiment"
-  ) +
-  theme(
-    plot.title = element_text(hjust = 0.5, face = "bold", size = 14),
-    plot.subtitle = element_text(hjust = 0.5, size = 10),
-    legend.position = "right"
-  )
-
-print(graph1)
-
-# on crée un deuxième graphique avec ellipses de confiance
+# on crée un premier graphique avec ellipses de confiance
 
 ellipses <- ggplot(lda_all_proj, aes(x = LD1, y = LD2, color = Sentiment_Real)) +
   geom_point(alpha = 0.2, size = 0.8) +
@@ -60,7 +39,7 @@ ellipses <- ggplot(lda_all_proj, aes(x = LD1, y = LD2, color = Sentiment_Real)) 
 
 print(ellipses)
 
-# on crée un troisième graphique pour la variance expliquée
+# on crée un deuxième graphique pour la variance expliquée
 
 var_df <- data.frame(
   Axe = factor(paste0("LD", 1:length(proportions)), 
@@ -88,7 +67,7 @@ graph_variance <- ggplot(var_df, aes(x = Axe, y = Variance)) +
 print(graph_variance)
 
 
-# on crée un quatrième graphique pour les centroïdes
+# on crée un troisieme graphique pour les centroïdes
 # on calcule les centroïdes de chaque sentiment
 centroides <- lda_all_proj %>%
   group_by(Sentiment_Real) %>%

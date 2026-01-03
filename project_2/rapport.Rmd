@@ -1,0 +1,636 @@
+---
+title: "<FONT color='#0066CC'><FONT size = 4 ><DIV align= center> Mini Projet 2 RAPPORT - Justine POGEANT et Lina OUCHAOU </DIV></FONT></FONT>"
+output:
+  html_document:
+    highlight: textmate
+    theme: readable
+    toc: yes
+    toc_depth: 6
+    toc_float: yes
+---
+
+
+<style type="text/css">
+body, td {font-size: 15px;}
+code.r{font-size: 5px;}
+pre { font-size: 12px;}
+</style>
+
+
+# Introduction
+
+
+## L'objectif du projet
+ 
+Dans le cadre de ce mini projet 2, nous devions utiliser l'Analyse Factorielle Discriminante (AFD) pour analyser et classer automatiquement des tweets selon leur sentiment (Positif, Négatif, Neutre, Irrelevant).
+
+## Dataset
+
+Nous utilisons le dataset **Twitter Entity Sentiment Analysis** disponible sur Kaggle qui composé d'un fichier train et test.
+
+- Le fichier d'entraînement contient 74682 tweets avec leurs sentiments.
+- Le fichier de validation contient 1 000 tweets avec leurs sentiments.
+- Il existe 4 classes de catégories de sentiments : Positive, Negative, Neutral, Irrelevant
+- Il y a 4 colonnes dans notre dataset : TweetID (le numéro unique pour identifier le tweet), Entity (l'entité), Sentiment (la catégorie), TweetText (le contenu du tweet).
+
+Les tweets portent principalement sur des jeux vidéo, des marques et des réseaux sociaux.
+```{r load-data, echo=TRUE}
+# on charge les données
+train_data <- read_csv("/Users/justinepogeant/Documents/E4/COURS_S1/P2/Fouilles de donnée R/Fouilles_R/project_2/data/twitter_training.csv", 
+                       col_names = c("TweetID", "Entity", "Sentiment", "TweetText"),
+                       show_col_types = FALSE)
+
+validation_data <- read_csv("/Users/justinepogeant/Documents/E4/COURS_S1/P2/Fouilles de donnée R/Fouilles_R/project_2/data/twitter_validation.csv",
+                           col_names = c("TweetID", "Entity", "Sentiment", "TweetText"),
+                           show_col_types = FALSE)
+
+```
+
+## Distribution des sentiments
+```{r distribution-sentiments, fig.cap="Distribution des sentiments dans le dataset d'entraînement"}
+
+sentiment_table <- table(train_data$Sentiment)
+print(sentiment_table)
+print(round(prop.table(sentiment_table) * 100, 2))
+
+# les entités les plus fréquentes
+entity_table <- sort(table(train_data$Entity), decreasing = TRUE)
+print(head(entity_table, 10))
+
+# on affiche quelques exemples de tweets pour chaque sentiment
+print("exemples de tweets pour chaque sentiment")
+for(sent in unique(train_data$Sentiment)) {
+  print(paste("\n--- Sentiment:", sent, "---"))
+  examples <- train_data %>% 
+    filter(Sentiment == sent) %>% 
+    dplyr::select(TweetText) %>%  # Utilisation explicite de dplyr::select
+    head(3)
+  print(examples)
+}
+```
+
+Résultat copié du terminal : 
+
+--------------------------------------------------------------------------------------
+"Tweets d'entraînement: 74682"  
+[1] "Tweets de validation: 1000"
+
+Irrelevant   Negative    Neutral   Positive 
+     12990      22542      18318      20832 
+
+Irrelevant   Negative    Neutral   Positive 
+     17.39      30.18      24.53      27.89 
+
+                MaddenNFL                 Microsoft      TomClancysRainbowSix 
+                     2400                      2400                      2400 
+               CallOfDuty           LeagueOfLegends                   Verizon 
+                     2394                      2394                      2382 
+              ApexLegends CallOfDutyBlackopsColdWar                  Facebook 
+                     2376                      2376                      2370 
+                    Dota2 
+                     2364 
+[1] "exemples de tweets pour chaque sentiment"
+[1] "\n--- Sentiment: Positive ---"
+# A tibble: 3 × 1
+  TweetText                                            
+  <chr>                                                
+1 im getting on borderlands and i will murder you all ,
+2 I am coming to the borders and I will kill you all,  
+3 im getting on borderlands and i will kill you all,   
+[1] "\n--- Sentiment: Neutral ---"
+# A tibble: 3 × 1
+  TweetText                                                                     
+  <chr>                                                                         
+1 Rock-Hard La Varlope, RARE & POWERFUL, HANDSOME JACKPOT, Borderlands 3 (Xbox)…
+2 Rock-Hard La Varlope, RARE & POWERFUL, HANDSOME JACKPOT, Borderlands 3 (Xbox)…
+3 Rock-Hard La Varlope, RARE & POWERFUL, HANDSOME JACKPOT, Borderlands 3 (Xbox)…
+[1] "\n--- Sentiment: Negative ---"
+# A tibble: 3 × 1
+  TweetText                                                                   
+  <chr>                                                                       
+1 the biggest dissappoinment in my life came out a year ago fuck borderlands 3
+2 The biggest disappointment of my life came a year ago.                      
+3 The biggest disappointment of my life came a year ago.                      
+[1] "\n--- Sentiment: Irrelevant ---"
+# A tibble: 3 × 1
+  TweetText                                                                     
+  <chr>                                                                         
+1 Appreciate the (sonic) concepts / praxis Valenzuela and Landa-Posas thread to…
+2 Appreciate the (sound) concepts / practices that Valenzuela and Landa-Posas c…
+3 Evaluate the (sound) concepts / concepts of Valensela and Landa Pozas togethe…
+> 
+--------------------------------------------------------------------------------------
+
+---
+
+# Méthodologie
+
+Afin de réaliser ce projet, nous avons suivi les étapes suivantes :
+
+1. **Prétraitement et nettoyage** : on charge les données et on nettoie les textes
+2. **Feature engineering** : on extrait les caractéristiques avec la transformation TF-IDF
+3. **Analyse Factorielle Discriminante** : on applique l'AFD
+4. **Visualisation** : on créé des graphiques pour interpréter les résultats
+5. **Évaluation** : on évalue notre modèle avec une matrice de confusion et des scores de silhouette
+
+## Prétraitement du texte : fichier 2_pretraitement.R
+
+Dans ce fichier, on a commencé par charger les données de train et de test et on a affiché le nombre de tweets par jeu de donnée afin d'en savoir plus sur nos jeux de données.
+Parallèlement, on a ajouté des noms de colonnes car nos jeux de données n'en avait pas.
+Ensuite on a compté le nombre de tweets et regardé la distribution des sentiments, afin de comprendre la composition du dataset.
+Après, on a regardé ce que signifait la colonne entité pour comprendre de quoi parle les tweets et leur sujet.
+Enfin, on a affiché quelques exemples de tweets pour chaque sentiment afin de se faire une idée du contenu des tweets.
+
+
+### Nettoyage des données : fichier 3_nettoyage.R
+
+Dans ce fichier, nous avons nettoyé les données grâce à la fonction clean_text qui va :
+- mettre tous les tweets en minuscules
+- supprimer les URLs, les mentions et les hashtags
+- supprimer la ponctuation et les chiffres
+- normaliser les espaces (supprimer les espaces multiples)
+
+
+```{r preprocessing, echo=TRUE}
+
+clean_text <- function(text) {
+  text <- tolower(text)  # Minuscules
+  text <- gsub("http\\S+|www\\S+", "", text)  # URLs
+  text <- gsub("@\\w+", "", text)  # Mentions
+  text <- gsub("#\\w+", "", text)  # Hashtags
+  text <- gsub("[[:punct:]]", " ", text)  # Ponctuation
+  text <- gsub("[[:digit:]]", "", text)  # Chiffres
+  text <- gsub("\\s+", " ", text)  # Espaces multiples
+  text <- trimws(text)  # Espaces début/fin
+  return(text)
+}
+```
+
+Ensuite dans la continuité du nettoyage, nous avons supprimé les stopwords, c'est-à-dire les mots vides puisqu'ils ne nous servent pas car n'apportent pas d'information pour l'analyse de sentiments.
+```{r tokenization, echo=TRUE}
+
+# on enlève les mots vides
+data("stop_words")  # Stopwords en anglais c'est les mots vides
+
+# on supprime des mots vides
+train_tokens <- train_data %>%
+  unnest_tokens(word, TweetText_clean) %>% #transforme chaque tweet en lignes de mots
+  anti_join(stop_words, by = "word") %>% #supprime les mots vides
+  filter(nchar(word) > 2)  # enlève les tokens très courts (<= 2 caractères) parce qu'ils servent à rien
+
+```
+
+## Extraction de caractéristiques (TF-IDF) : fichier 4_feature_engineering.R
+
+Afin de poursuivre notre mini projet et d'appliquer l'AFD. Nous utilisons la méthode TF-IDF pour transformer le texte en vecteurs numériques car l'AFD nécessite des données numériques.
+
+Dans un premier temps, nous avons créé un corpus pour donner un ID unique à chaque tweet mais surtout car c'est le format requis par DocumentTermMatrix() pour créer la matrice TF-IDF
+Après cela, on a créé la matrice TF-IDF avec DocumentTermMatrix dans laquelle on va donner notret corpus.
+Ensuite on a converti notre matrice tfid en dataframe pour pouvoir l'utiliser dans l'AFD.
+On a nettoyé les lignes vides et on a visualisé notre matrice TF-IDF.
+
+```{r tfidf, echo=TRUE}
+
+dtm_train <- DocumentTermMatrix(collection_train,  # documentTermMatrix = tableau géant
+                                control = list(
+                                  weighting = weightTfIdf,
+                                  bounds = list(global = c(10, Inf)),  # Mots apparaissant au moins 10 fois
+                                  removeNumbers = TRUE,
+                                  removePunctuation = TRUE,
+                                  stopwords = TRUE
+                                ))
+```
+
+## Pourquoi utiliser l'AFD
+
+L'AFD a été choisie pour ce mini projet car elle permet de réduire la dimensionnalité élevée des données textuelles (321 dimensions) vers beaucoup moins de dimensions (2-3 dimensions).
+Ensuite, l'AFD permet de maximiser la séparation entre les classes de sentiments en trouvant des axes discriminants optimaux, et enfin L'AFD va nous permettre de classifier de nouveaux tweets.
+Par ailleurs, l'AFD va exploiter les labels de sentiment pour construire des axes qui séparent vraiment les classes, rendant ainsi la visualisation plus pertinente pour la tâche de classification. 
+
+---
+
+# Implémentation de l'AFD : fichier 5_Analyse_factorielle_discriminante.R
+
+Dans un premier temps, nous avons séparé les features (TF-IDF) et les labels (Sentiment).
+Ensuite, on a divisé les données en un ensemble d'entraînement (80%) et un ensemble de test (20%) pour évaluer la performance du modèle.
+On a choisi 80-20 car c'est la répartition classique que nous avons appris dans nos cours et que nous utilisons à chaque fois.
+D'ailleurs, on a utilisé un seed pour garantir que notre division soit toujours la même et soit reproductible.
+
+Après cela, nous avons enfin appliquer l'AFD avec la fonction lda() du package MASS, à la fois sur nos données d'entraînement et de test.
+Avec la formule Sentiment ~ . , on dit à notre modèle que nous souhaitons prédire la variable Sentiments grâce à toutes les autres variables.
+La fonction lda va retourner 3 axes discriminants car nous avons 4 classes de sentiments (le nombre d'axes est égal au nombre de classes - 1).
+Ces axes sont lD1 qui s'agit de l'axe qui sépare le mieux les classes, LD2 qui sépare le mieux les classes restant après LD1 et LD3 qui sépare le mieux les classes restant après LD1 et LD2.
+Nous avons créé notre dataframe qui comporte nos 3 axes à la fois pour l'apprentissage et le test afin de pouvoir visualiser les axes.
+
+## Application de l'AFD
+```{r lda-model, echo=TRUE}
+# on sépare les features (X) et les labels (y)
+X <- dataframe_tfidf[, -ncol(dataframe_tfidf)]  # on prends toutes les colonnes sauf Sentiment
+y <- as.factor(dataframe_tfidf$Sentiment)     # et là on prends la variable cible Sentiment
+
+#print(paste("dim des features", nrow(X), "x", ncol(X)))
+#print("distribution des classes")
+#print(table(y))
+
+# on divise train/test (80/20) pour évaluer la performance
+set.seed(123)  # Pour reproductibilité des résultats
+train_indices <- sample(1:nrow(X), size = 0.8 * nrow(X))
+
+X_train <- X[train_indices, ]
+y_train <- y[train_indices]
+X_test <- X[-train_indices, ]
+y_test <- y[-train_indices]
+
+#print(paste("taille du training set", nrow(X_train)))
+#print(paste("taille du test set", nrow(X_test)))
+
+
+# on applique l'afd avec paquage MASS
+# on créé le dataframe pour la LDA
+lda_train_data <- data.frame(X_train, Sentiment = y_train)
+
+# on applique l'Analyse Discriminante Linéaire lda
+# L'AFD créera au maximum k-1 axes discriminants (k = nombre de classes)
+# Ici : 4 sentiments → maximum 3 axes discriminants (LD1, LD2, LD3)
+lda_model <- lda(Sentiment ~ ., data = lda_train_data)
+print(lda_model)
+#
+
+# on calcule la proportion de variance expliquée par chaque axe discriminant.
+proportions <- lda_model$svd^2 / sum(lda_model$svd^2)
+names(proportions) <- paste0("LD", 1:length(proportions))
+
+# on calcule la variance cumulée
+var_cumulee <- cumsum(proportions)
+
+# on applique le modèle LDA aux données d'entraînement
+lda_pred_train <- predict(lda_model, newdata = X_train)
+
+# on applique le modèle LDA aux  données de test
+lda_pred_test <- predict(lda_model, newdata = X_test)
+
+# on crée les dataframes avec les coordonnées projetées
+lda_train_proj <- data.frame(
+  LD1 = lda_pred_train$x[, 1],
+  LD2 = lda_pred_train$x[, 2],
+  LD3 = if(ncol(lda_pred_train$x) >= 3) lda_pred_train$x[, 3] else NA,
+  Sentiment_Real = y_train,
+  Sentiment_Pred = lda_pred_train$class,
+  Type = "Train"
+)
+
+lda_test_proj <- data.frame(
+  LD1 = lda_pred_test$x[, 1],
+  LD2 = lda_pred_test$x[, 2],
+  LD3 = if(ncol(lda_pred_test$x) >= 3) lda_pred_test$x[, 3] else NA,
+  Sentiment_Real = y_test,
+  Sentiment_Pred = lda_pred_test$class,
+  Type = "Test"
+)
+```
+
+
+---
+# Visualisation : fichier 6_visualisation.R
+
+A présent, nous souhaitons visualiser les résultats de l'AFD.
+Pour ce faire, nous avons créé 3 graphiques différents pour interpréter les résultats.
+
+Le premier graphique est la projection avec ellipses de confiance à 95% pour chaque sentiment, qui nous montre clairement la qualité de la séparation entre les sentiments.
+
+```{r graph_ellipses, fig.cap="Projection AFD avec ellipses de confiance (95%)"}
+ellipses <- ggplot(lda_all_proj, aes(x = LD1, y = LD2, color = Sentiment_Real)) +
+  geom_point(alpha = 0.2, size = 0.8) +
+  stat_ellipse(level = 0.95, linewidth = 1.2) +
+  scale_color_manual(values = couleurs) +
+  theme_minimal() +
+  labs(
+    title = "Projection AFD avec ellipses de confiance (95%)",
+    subtitle = "Les ellipses délimitent les zones de concentration des sentiments",
+    x = paste0("LD1 (", round(proportions[1]*100, 1), "%)"),
+    y = paste0("LD2 (", round(proportions[2]*100, 1), "%)"),
+    color = "Sentiment"
+  ) +
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 14),
+    plot.subtitle = element_text(hjust = 0.5, size = 11),
+    legend.position = "right"
+  )
+
+print(ellipses)
+```
+
+Le deuxième graphique est le graphique de la variance expliquée par chaque axe discriminant, qui nous montre combien de variance chaque axe récupère.
+
+```{r graph_variance, fig.cap="Variance expliquée par chaque axe discriminant"}
+var_df <- data.frame(
+  Axe = factor(paste0("LD", 1:length(proportions)), 
+               levels = paste0("LD", 1:length(proportions))),
+  Variance = proportions * 100
+)
+
+graph_variance <- ggplot(var_df, aes(x = Axe, y = Variance)) +
+  geom_col(fill = "steelblue", width = 0.6) +
+  geom_text(aes(label = paste0(round(Variance, 1), "%")), 
+            vjust = -0.5, size = 5, fontface = "bold") +
+  theme_minimal() +
+  labs(
+    title = "Variance expliquée par chaque axe discriminant",
+    subtitle = paste0("LD1 + LD2 = ", round(sum(proportions[1:2])*100, 1), "% de la variance"),
+    x = "Axe discriminant",
+    y = "Variance expliquée (%)"
+  ) +
+  ylim(0, max(proportions * 100) * 1.15) +
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 14),
+    plot.subtitle = element_text(hjust = 0.5, size = 11)
+  )
+
+print(graph_variance)
+```
+
+Afin de pouvoir visualiser un dernier graphique de la projection avec les centroïdes des sentiments, nous avons fait le calcul des centroïdes de chaque sentiment.
+Ainsi pour ce calcul, nous avons fait la moyenne des coordonnées LD1, LD2 et LD3 pour chaque sentiment.
+```{r calcul-centroïdes, echo=TRUE}
+centroides <- lda_all_proj %>%
+  group_by(Sentiment_Real) %>%
+  summarise(
+    LD1_mean = mean(LD1),
+    LD2_mean = mean(LD2),
+    LD3_mean = mean(LD3, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+print(centroides)
+```
+
+Avec ce calcul de réaliser, nous avons créé le graphique de projection avec les centroïdes, qui permet de calculer les distances entre sentiments.
+
+```{r graph_centroides, fig.cap="Projection avec centroïdes des sentiments"}
+graph_centroides <- ggplot(lda_all_proj, aes(x = LD1, y = LD2)) +
+  geom_point(aes(color = Sentiment_Real), alpha = 0.2, size = 0.8) +
+  stat_ellipse(aes(color = Sentiment_Real), level = 0.95, linewidth = 1.2) +
+  geom_point(data = centroides, 
+             aes(x = LD1_mean, y = LD2_mean, color = Sentiment_Real),
+             size = 10, shape = 18) +
+  geom_text(data = centroides,
+            aes(x = LD1_mean, y = LD2_mean, label = Sentiment_Real),
+            vjust = -2, fontface = "bold", size = 5, color = "black") +
+  scale_color_manual(values = couleurs) +
+  theme_minimal() +
+  labs(
+    title = "Projection de l'AFD avec centroïdes pour les sentiments",
+    subtitle = "Les losanges indiquent le centre de chaque groupe",
+    x = "LD1",
+    y = "LD2",
+    color = "Sentiment"
+  ) +
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 14),
+    plot.subtitle = element_text(hjust = 0.5, size = 11),
+    legend.position = "right"
+  )
+
+print(graph_centroides)
+```
+
+## Centroïdes et distances
+```{r centroids, fig.cap="Projection avec centroïdes des sentiments"}
+centroides <- lda_all_proj %>%
+  group_by(Sentiment_Real) %>%
+  summarise(
+    LD1_mean = mean(LD1),
+    LD2_mean = mean(LD2),
+    LD3_mean = mean(LD3),
+    .groups = "drop"
+  )
+
+ggplot(lda_all_proj, aes(x = LD1, y = LD2)) +
+  geom_point(aes(color = Sentiment_Real), alpha = 0.15, size = 0.8) +
+  stat_ellipse(aes(color = Sentiment_Real), level = 0.95, linewidth = 1.2) +
+  geom_point(data = centroides, 
+             aes(x = LD1_mean, y = LD2_mean, color = Sentiment_Real),
+             size = 10, shape = 18) +
+  geom_text(data = centroides,
+            aes(x = LD1_mean, y = LD2_mean, label = Sentiment_Real),
+            vjust = -2, fontface = "bold", size = 5, color = "black") +
+  scale_color_manual(values = couleurs) +
+  theme_minimal() +
+  labs(
+    title = "Centroïdes des sentiments dans l'espace discriminant",
+    x = "LD1", y = "LD2", color = "Sentiment"
+  ) +
+  theme(plot.title = element_text(hjust = 0.5, face = "bold", size = 16))
+```
+
+Enfin, on a sauvegardé les graphiques de manière statique pour pouvoir les visualiser dans notre architecture de projet.
+
+---
+# Évaluation des performances : fichier 7_evaluation.R
+
+Après avoir visualisé les résultats de l'AFD, la prochaine étape était d'évaluer les performances de notre classification.
+Pour cette évaluation, nous avons donc générer la matrice de confusion et ainsi l'exactitude du modèle (accuracy) et ensuite nous avons calculé le score de silhouette.
+
+
+Nous avons donc calculé la matrice de confusion en utilisant la fonction confusionMatrix() du package caret.
+
+## Matrice de confusion : 
+
+La matrice de confusion est composée de 4 lignes et 4 colonnes, où chaque ligne représente les vraies classes et chaque colonne représente les classes prédites par l'AFD.
+
+```{r classification-eval}
+mat_confusion <- confusionMatrix(
+  data = lda_test_proj$Sentiment_Pred,      # Ce que l'AFD a prédit
+  reference = lda_test_proj$Sentiment_Real  # La vraie réponse
+)
+
+print(mat_confusion)
+```
+Ce code nous renvoie ce réultat : 
+
+            Reference
+Prediction   Irrelevant Negative Neutral Positive
+  Irrelevant        526      209     201      212
+  Negative          718     2825     822      749
+  Neutral           512      633    1781      639
+  Positive          567      488     602     2173
+
+(copié du terminal)
+
+Grâce à cette matrice, nous pouvons lire, par exemple, que 526 tweets ont été prédits comme Irrelevant et ils sont effectivement issus de la classe Irrelevant, cela constitue les True Positives pour la classe Irrelevant.
+Par ailleurs, 488 tweets ont été prédits comme Positive alors qu'ils sont en réalité Irrelevant, cela constitue les False Positives pour la classe Positive, et nous montre les limites de notre modèle
+Toutes les valeurs issues de la diagonale de la matrice de confusion représente les prédictions effectué par l'AFD qui se révèlent correctes pour chaque classe (True Positives).
+
+Notre matrice de confusion calculé, nous avons pu calculé le score d'accuracy, soit la proportion de prédictions correctes sur l'ensemble de test.
+
+Calcul de l'accuracy : True Positives + True Negatives / Total des prédictions
+```{r classification-accuracy}
+accuracy <- mat_confusion$overall['Accuracy']
+print(paste("Accuracy :", round(accuracy * 100, 2), "%"))
+```
+Voici le résultat de l'exactitude : Accuracy : 0.5349
+On en déduit donc que notre modèle n'est pas si performant, car une accuracy de 53.49% est moyenne (une exactitude entre 50 et 60% est considérée moyenne).
+
+### Score de silhouette : 
+
+Comme nous avons créer un graphique de projection avec les centroïdes des sentiments qui est du clustering, nous avons décidé de calculer le score de silhouette pour évaluer la qualité de la séparation entre les clusters de sentiments.
+Nous avons choisi cette mesure car elle est couramment utilisée pour évaluer les résultats des clusters dans les analyses de données et surtout car elle était énoncée dans le sujet du mini projet.
+
+Pour calculer ce score nous avons :
+
+Dans un premier temps, nous avons échantillonné 5000 tweets aléatoirement pour réduire le temps de calcul car nous savons quee le calcul de ce score peut être couteux.
+On a choisi comme valeur d'échantillonage 5000 car nous avons essayé plus valeur différentes : 1000, 5000, 10000 et 30000 et 5000 nous a semblé un bon compromis entre temps de calcul et précision du score. 
+En effet, pour la valeur 1000, lr score est "Score moyen 0.014" qui est apparu très rapidement, mais 5000 nous a donné "Score moyen 0.016" tout aussi rapidement, mais plus précis.
+10000 nous a donné un score de "Score moyen 0.015" ce qui est similaire aux précedentes valeurs mais dont le calcul à pris legèrement plus de temps et pour 30000, le temps de calcul était beaucoup trop long.
+
+Pour set.seed(123), nous avons choisi d'utiliser cette fonction afin que notre code soit reproductible et donne toujours le même score.
+Le choix de la valeur 123 est provient de nos recherches sur internet, c'est une valeur conventionelle pour seed. Par ailleurs on en a testé plusieurs et le score de silhouette changeait peu mais surtout diminuait.
+
+Avec coordonnée, nous avons extrait les coordonnées LD1, LD2 et LD3 des 5000 tweets échantillonnés.
+La variable sentiments contient les classes des sentiments pour ces tweets échantillonnés.
+```{r echnatillonage}
+# on prend un échantillon
+set.seed(123)
+sample_size <- min(5000, nrow(lda_all_proj))
+sample_indices <- sample(1:nrow(lda_all_proj), sample_size)
+
+coordonnee <- as.matrix(lda_all_proj[sample_indices, c("LD1", "LD2", "LD3")])
+sentiments <- as.numeric(lda_all_proj$Sentiment_Real[sample_indices])
+```
+
+
+Ensuite, nous avons calculé la matrice des distances entre tous les tweets échantillonnés avec la fonction dist().
+Nous avons donc la distance des tweets avec les autres tweets de leur groupe et des autres groupes.
+Ainsi, nous pouvons calculer le score de silhouette avec la fonction silhouette() du package cluster.
+
+Calcul du score de silhouette = a - b / maximum des deux distances a et b
+
+a = distance entre un tweet et les autres tweets de son groupe
+b = distance entre un tweet et les tweets des autres groupes
+
+La fonction silhouette() nous renvoie donc une matrice avec pour chaque tweet son score de silhouette.
+Après cela, nous pouvons alors calculer le score moyen de silhouette.
+
+On a donc "Score moyen 0.015" ce qui est très faible et nous explique que la séparation entre les groupes est faible.
+En effet, pour avoir un bon score de silhouette, il faudrait que celui-ci soit supérieur à 0.25 ou encore mieux, supérieur à 0.5 pour avoir une très bonne séparation des groupes.
+
+```{r score silhouette}
+distances <- dist(coordonnee)
+
+silhouette_resultat <- silhouette(sentiments, distances)
+
+score_moyen <- mean(silhouette_resultat[, "sil_width"])
+
+print(paste("Score moyen", round(score_moyen, 3)))
+```
+
+---
+
+# Discussion & Conclusion
+
+## Analyse des résultats
+
+On a pu voir que de notre modèle AFD n'est pas très performant, on obtient des résultats mitigés.
+Dans l'espace de l'AFD, les clzsse Positives et Négatives sont plutôt séparées (on peut le voir dans le graphique des ellipses, les ellipses rouge et verte se touchent mais sont tout de même séparées).
+Cependant pour les classes Neutrales et Irrelevantes, on peut voir que leur ellipses (orange et grise) sontquasiment l'une sur l'autre, ce qui nous ammène donc à penser que le modèle mélange fortement ces deux sentiments.
+
+On pense que ces sentiments sont confondus car ni Neutral ni Irrelevant n'exprime de sentiment fort et les tweets de ces classes peuvent contenir des mots similaires.
+
+En outre, lors de l'évaluation de notre AFD, la matrice de confusion, comme nous pouvons voir ci-dessous, et surtout le score d'accuracy de 53.49% nous montre que notre modèle est vraiment moyen et confirme que celui-ci n'est pas très performant.
+
+Résultat copié du terminal :
+---------------------------------------------------
+"On évalue les performances de l'AFD"
+ "On compare ce que l'AFD a prédit vs la réalité\n"
+Confusion Matrix and Statistics
+
+            Reference
+Prediction   Irrelevant Negative Neutral Positive
+  Irrelevant        526      209     201      212
+  Negative          718     2825     822      749
+  Neutral           512      633    1781      639
+  Positive          567      488     602     2173
+
+Overall Statistics
+                                          
+               Accuracy : 0.5349          
+                 95% CI : (0.5265, 0.5433)
+    No Information Rate : 0.3042          
+    P-Value [Acc > NIR] : < 2.2e-16       
+                                          
+                  Kappa : 0.3622          
+                                          
+ Mcnemar's Test P-Value : < 2.2e-16       
+--------------------------------------------------
+
+
+Par ailleurs, le score de silhouette moyen de 0.015 (voir ci-dessous) indique que la séparation entre les groupes de sentiments dans l'espace projeté par l'AFD est vraiment très faible.
+Cela confirme encore une fois que notre modèle n'est pas très performant.
+
+On peut également voir que la classe Irrelevant est effectivement la moins bien classée avec une sensibilité de seulement 22.64%.
+Ce pourcentage signifie donc que seulement 22.64% des tweets Irrelevant sont correctement classés par le modèle.
+
+Résultat copié du terminal :
+------------------------------------------------------------------------
+Statistics by Class:
+
+                     Class: Irrelevant Class: Negative Class: Neutral
+Sensitivity                    0.22643          0.6799         0.5229
+Specificity                    0.94512          0.7591         0.8260
+Pos Pred Value                 0.45819          0.5524         0.4996
+Neg Pred Value                 0.85634          0.8443         0.8390
+Prevalence                     0.17010          0.3042         0.2494
+Detection Rate                 0.03852          0.2069         0.1304
+Detection Prevalence           0.08406          0.3745         0.2610
+Balanced Accuracy              0.58578          0.7195         0.6744
+                     Class: Positive
+Sensitivity                   0.5759
+Specificity                   0.8324
+Pos Pred Value                0.5674
+Neg Pred Value                0.8372
+Prevalence                    0.2763
+Detection Rate                0.1591
+Detection Prevalence          0.2804
+Balanced Accuracy             0.7041
+[1] "Accuracy : 53.49 %"
+[1] "Score moyen 0.015"
+------------------------------------------------------------------------
+
+
+## Utilité de l'AFD
+
+Malgré des performances moyennes, nous pensons que l'AFD est tout de même utile pour l'analyse de sentiments.
+On a quand même réussi avec l'AFD à montrer quels sentiments sont naturellement séparable et lesquels constituent au contraire un problème.
+Nous pensons que l'AFD est surtout utiles dans des classifications simples comme celle des classes Positives et Negatives.
+Cependant au vu des résultats lors de l'évaluation, nous pensons que l'AFD a des limites et n'est pas suffisante pour des classifications plus compliquées comme comme pour les classes Neutrales et Irrelevantes
+
+----
+
+## Conclusion
+
+Ce mini projet nous a permis de découvrir davantage l'Analyse Factorielle Discriminante et son application à la classification de texte.
+Nous avons pu mettre en pratique les différentes étapes menant à l'applcation de l'AFD. 
+Nous nous sommes entraînés au prétraitement et nettoyage de texte, au feature engineering avec la méthode TF-IDF, à l'application de l'AFD puis ensuite à la visualisation des résultats et enfin à l'évaluation des performances de notre modèle.
+Bien que nous n'ayons pas obtenu de très bons résultats, nous avons tout de même compris et reussie à classer des tweets selon leur sentiment avec l'AFD !
+
+
+----
+
+# Travaux futurs
+
+## Améliorations possibles
+
+La première amélioration auquelle nous pensons est d'essayer de classifier les tweets avec d'autres techniques de classification afin d'obtenir de meilleurs résultats.
+De surcoît, nous pourrions essayer de nettoyer ou traiter nos données de manière différentes afin de récuperer plus d'informations pertinentes.
+Nous pourrions, par exemple analyser la ponctuation ou les emojis présents dans les tweets, car nous pensons qu'ils peuvent refléter plus d'émotions que certains mots.
+
+## Pespectives
+
+Nous pensons que l'analyse de sentiments des tweets peut se révéler très utiles pour les entreprises qui souhaitent connaître ce que pense le public de leurs produits ou service.
+Les politiciens aussi peuvent utiliser cette analyse pour comprendre l'opinion publique durant leur campagne.
+L'analyse de sentiments peut aussi être très utiles pour les réseaux sociaux pour réduire les contenus inapropriés et limités le cyberharcèlement. 
+Par ailleurs, cette analyse peut être aussi très utiles dans le cas de chatbots pourb mieux comprendre les émotions et les demandes des utilisateurs.
+
+---
+
+*Projet réalisé par Justine Pogeant et Lina Ouchaou - Fouilles de données en R - 2025-2026*
