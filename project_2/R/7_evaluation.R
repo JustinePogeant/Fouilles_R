@@ -23,15 +23,15 @@ accuracy <- mat_confusion$overall['Accuracy']
 print(paste("Accuracy :", round(accuracy * 100, 2), "%"))
 
 
-library(cluster)
-library(ggplot2)
+library(cluster) # pour la fonction silhouette
+library(ggplot2) # pour visualiser
 
 # on fait le score de silhouette pour évaluer la qualité de la séparation des clusters
 
 
 # on prend un échantillon
 set.seed(123)
-sample_size <- min(3000, nrow(lda_all_proj))
+sample_size <- min(10000, nrow(lda_all_proj))
 sample_indices <- sample(1:nrow(lda_all_proj), sample_size)
 
 # on récupère les coordonnées des tweets échantillonnés
