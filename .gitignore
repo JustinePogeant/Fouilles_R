@@ -1,0 +1,3 @@
+echo "project_3/data/french_thesis_20231021_metadata.csv" >> .gitignore
+echo "Fouilles_R-clean/" >> .gitignoreproject_3/data/french_thesis_20231021_metadata.csv
+Fouilles_R-clean/
